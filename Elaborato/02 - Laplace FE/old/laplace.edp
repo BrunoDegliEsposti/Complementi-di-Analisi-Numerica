@@ -1,0 +1,44 @@
+int Ntheta = round(2*pi*10);
+func f = x/(x*x+y*y);
+
+real t0, t1, t2, t3;
+
+border outer(t = 0, 2*pi) {
+	x = 2*cos(t);
+	y = 2*sin(t);
+	label = 1;
+}
+
+border inner(t = 0, 2*pi) {
+	x = 1*cos(t);
+	y = 1*sin(t);
+	label = 2;
+}
+
+t0 = clock();
+// costruiamo la mesh. La parametrizzazione deve percorrere
+// il bordo lasciando a sinistra la parte interna.
+// "-N" cambia il verso di percorrenza.
+mesh Th = buildmesh(outer(Ntheta) + inner(-Ntheta));
+fespace Vh(Th, P1);
+Vh u, uh, v;
+problem laplace(uh,v) = int2d(Th)(dx(uh)*dx(v)+dy(uh)*dy(v))
+	+ on(1, uh=f)
+	+ on(2, uh=f);
+t1 = clock();
+
+t2 = clock();
+laplace;
+t3 = clock();
+
+u = f;
+Vh e = uh-u;
+cout << "dimensione = " << Vh.ndof << endl;
+cout << "tempo assemblaggio = " << t1-t0 << " s" << endl;
+cout << "tempo algebra lineare = " << t3-t2 << " s" << endl;
+cout << "linf error = " << e[].linfty << endl;
+cout << "l2 error = " << e[].l2 << endl;
+cout << "L2 error = " << sqrt(int2d(Th)(e^2)) << endl;
+cout << "H1 error = " << sqrt(int2d(Th)(e^2+dx(e)^2+dy(e)^2)) << endl;
+
+plot(e, cmm="Errore u-uh");

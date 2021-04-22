@@ -1,0 +1,70 @@
+real mu = 1;
+real bx = 100;
+real by = 0;
+real bnorm = sqrt(bx*bx+by*by);
+real bxn = bx/bnorm;
+real byn = by/bnorm;
+real sigma = 1;
+real t0, t1, t2, t3;
+
+/* Tutti i bordi sono già orientati correttamente */
+
+border left(t = -3, 3) {
+	x = -1;
+	y = -t;
+	label = 1;
+}
+
+border down(t = -1, 1) {
+	x = t;
+	y = t-2;
+	label = 2;
+}
+
+border right(t = -1, 1) {
+	x = 1;
+	y = t;
+	label = 3;
+}
+
+border up(t = -1, 1) {
+	x = -t;
+	y = t+2;
+	label = 4;
+}
+
+func real phi(real pe) {
+	return pe - 1 + 2*pe/(exp(2*pe)-1);
+}
+
+for (real h = 0.5; h > 0.01; h=0.7*h) {
+	t0 = clock();
+	mesh Th = buildmesh(left(15) + down(7) + right(5) + up(7));
+	Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+	Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+	fespace Vh(Th, P2);
+	Vh u, v;
+	real pe = bnorm*h/(2*mu);
+	real muupwind = mu*(1+phi(pe));
+	problem adr(u,v)
+	    = int2d(Th)(mu*(dx(u)*dx(v)+dy(u)*dy(v)))
+	    /* Il vettore b deve comparire normalizzato nei termini relativi alla streamline diffusion */
+	    + int2d(Th)(mu*phi(pe)*(bxn*dx(u)+byn*dy(u))*(bxn*dx(v)+byn*dy(v)))
+	    - int1d(Th, 2, 4)(mu*phi(pe)*v*(bxn*dx(u)+byn*dy(u))*(bxn*N.x+byn*N.y))
+	    + int2d(Th)((bx*dx(u)+by*dy(u))*v)
+	    + int2d(Th)(sigma*u*v)
+		+ on(1, u=+1)
+		+ on(3, u=-1);
+	t1 = clock();
+
+	t2 = clock();
+	adr;
+	t3 = clock();
+
+	cout << "Valore di h: " << h << endl;
+	cout << "Valore di phi(pe): " << phi(pe) << endl;
+	cout << "Dimensione di Vh: " << Vh.ndof << endl;
+	cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+	cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl << endl;
+	plot(u, wait=1, fill=1, cmm="Valore di h: " + h);
+}

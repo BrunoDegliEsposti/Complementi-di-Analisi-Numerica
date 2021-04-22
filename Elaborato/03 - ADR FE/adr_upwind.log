@@ -1,0 +1,168 @@
+-- FreeFem++ v  4.200001 (date Sat, Jun 08, 2019  6:08:22 PM git v4.2.1)
+ Load: lg_fem lg_mesh lg_mesh3 eigenvalue
+    1 : real mu = 1;
+    2 : real bx = 30;
+    3 : real by = 0;
+    4 : real bnorm = sqrt(bx*bx+by*by);
+    5 : real bxn = bx/bnorm;
+    6 : real byn = by/bnorm;
+    7 : real sigma = 1;
+    8 : real t0, t1, t2, t3;
+    9 :
+   10 : /* Tutti i bordi sono già orientati correttamente in senso antiorario */
+   11 : border left(t = -3, 3)  {x = -1; y = -t;  label = 1;}
+   12 : border down(t = -1, 1)  {x = t;  y = t-2; label = 2;}
+   13 : border right(t = -1, 1) {x = 1;  y = t;   label = 3;}
+   14 : border up(t = -1, 1)    {x = -t; y = t+2; label = 4;}
+   15 :
+   16 : // Costruzione di una soluzione di riferimento
+   17 : mesh Tref = buildmesh(left(60) + down(28) + right(40) + up(28));
+   18 : fespace Vref(Tref, P2);
+   19 : Vref u, v;
+   20 : problem adr(u,v)
+   21 :         = int2d(Tref)(mu*(dx(u)*dx(v)+dy(u)*dy(v)))
+   22 :         + int2d(Tref)((bx*dx(u)+by*dy(u))*v)
+   23 :         + int2d(Tref)(sigma*u*v)
+   24 :         + on(1, u=+1)
+   25 :         + on(3, u=-1);
+   26 : adr;
+   27 : Tref = adaptmesh(Tref, u, hmax=0.1, err=0.001, nbvx=10000000);
+   28 : adr;    // Ricalcolo della soluzione dopo il primo adattamento
+   29 : Tref = adaptmesh(Tref, u, hmax=0.01, err=0.0001, nbvx=10000000);
+   30 : adr;    // Ricalcolo della soluzione dopo il secondo adattamento
+   31 :
+   32 : cout << "Viscosita' artificiale di tipo upwind" << endl;
+   33 : cout << "Elementi P1" << endl;
+   34 :
+   35 : for (real h = 0.5; h > 0.01; h *= 1/sqrt(2)) {
+   36 :         t0 = clock();
+   37 :         int n = round(1/h);
+   38 :         mesh Th = buildmesh(left(6*n) + down(3*n) + right(4*n) + up(3*n));
+   39 :         fespace Vh(Th, P1);
+   40 :         Vh uh, vh;
+   41 :         real pe = bnorm*h/(2*mu);
+   42 :         real muupwind = mu*(1+pe);
+   43 :         problem adr(uh,vh)
+   44 :             = int2d(Th)(muupwind*(dx(uh)*dx(vh)+dy(uh)*dy(vh)))
+   45 :             + int2d(Th)((bx*dx(uh)+by*dy(uh))*vh)
+   46 :             + int2d(Th)(sigma*uh*vh)
+   47 :                 + on(1, uh=+1)
+   48 :                 + on(3, uh=-1);
+   49 :         t1 = clock();
+   50 :
+   51 :         t2 = clock();
+   52 :         adr;
+   53 :         t3 = clock();
+   54 :
+   55 :         Vref e = uh - u;
+   56 :         real einf = e[].linfty;
+   57 :         real eH1 = sqrt(int2d(Tref)(e^2+dx(e)^2+dy(e)^2));
+   58 :
+   59 :         //
+   60 :         verbosity = 0;
+   61 :         cout << "Valore di h: " << h << endl;
+   62 :         cout << "Valore di hmax sulla mesh: " << Th.hmax << endl;
+   63 :         cout << "Valore di Pe: " << pe << endl;
+   64 :         cout << "Stima dell'errore in norma infinito: " << einf << endl;
+   65 :         cout << "Stima dell'errore in norma H1: " << eH1 << endl;
+   66 :         cout << "Max(ucalcolata - uesatta): " << e[].max << endl;
+   67 :         cout << "Dimensione del sistema lineare: " << Vh.ndof << endl;
+   68 :         cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+   69 :         cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl << endl;
+   70 :         //
+   71 :
+   72 :         //
+   73 :         plot(uh, wait=1, fill=1, cmm="Valore di h: " + h);
+   74 :         plot(e,  wait=1, fill=1, cmm="Errore uh-u");
+   75 :         //
+   76 :
+   77 :         /*
+   78 :         verbosity = 0;
+   79 :         cout.scientific;
+   80 :         cout.precision(2);
+   81 :         cout << "\\num{" << h << "} & ";
+   82 :         cout << "\\num{" << eH1 << "} & ";
+   83 :         cout << "\\num{" << e[].max << "} & ";
+   84 :         cout << Vh.ndof << " & ";
+   85 :         cout.precision(1);
+   86 :         cout << "\\num{" << t1-t0 << "} & ";
+   87 :         cout << "\\num{" << t3-t2 << "}" << endl;
+   88 :         */
+   89 : }
+   90 :  sizestack + 1024 =2848  ( 1824 )
+ 
+  --  mesh:  Nb of Triangles =   2482, Nb of Vertices 1320
+  -- Solve :
+          min -1  max 1
+  number of required edges : 0
+  -- adaptmesh Regulary:  Nb triangles 7851 , h  min 0.00327974 , h max 0.140823
+     area =  8 , M area = 3514.84 , M area/( |Khat| nt) 1.0339
+     infiny-regulaty:  min 0.327196  max 2.23542
+     anisomax  30.0678, beta max = 1.71757 min  0.75404
+  --  mesh:  Nb of Triangles =   7851, Nb of Vertices 4084
+  -- Solve :
+          min -1  max 1
+  number of required edges : 0
+  -- adaptmesh Regulary:  Nb triangles 268511 , h  min 0.000327032 , h max 0.019188
+     area =  8 , M area = 117843 , M area/( |Khat| nt) 1.01354
+     infiny-regulaty:  min 0.386901  max 2.17028
+     anisomax  38.6962, beta max = 1.37908 min  0.713383
+  --  mesh:  Nb of Triangles = 268511, Nb of Vertices 135129
+  -- Solve :
+          min -1  max 1
+Viscosita' artificiale di tipo upwind
+Elementi P1
+  --  mesh:  Nb of Triangles =    100, Nb of Vertices 67
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.5
+Valore di hmax sulla mesh: 0.708103
+Valore di Pe: 7.5
+Stima dell'errore in norma infinito: 1.52067
+Stima dell'errore in norma H1: 9.77112
+Max(ucalcolata - uesatta): 0.00613231
+Dimensione del sistema lineare: 67
+Tempo per l'assemblaggio: 0.001 s
+Tempo per la soluzione del sistema lineare: 0.001 s
+ 
+Valore di h: 0.353553
+Valore di hmax sulla mesh: 0.488865
+Valore di Pe: 5.3033
+Stima dell'errore in norma infinito: 1.4045
+Stima dell'errore in norma H1: 9.19196
+Max(ucalcolata - uesatta): 0.00496571
+Dimensione del sistema lineare: 137
+Tempo per l'assemblaggio: 0.001 s
+Tempo per la soluzione del sistema lineare: 0.002 s
+ 
+Valore di h: 0.25
+Valore di hmax sulla mesh: 0.359639
+Valore di Pe: 3.75
+Stima dell'errore in norma infinito: 1.29304
+Stima dell'errore in norma H1: 8.58265
+Max(ucalcolata - uesatta): 0.00391989
+Dimensione del sistema lineare: 230
+Tempo per l'assemblaggio: 0.002 s
+Tempo per la soluzione del sistema lineare: 0.003 s
+ 
+Valore di h: 0.176777
+Valore di hmax sulla mesh: 0.241285
+Valore di Pe: 2.65165
+Stima dell'errore in norma infinito: 1.13934
+Stima dell'errore in norma H1: 7.6448
+Max(ucalcolata - uesatta): 0.00288204
+Dimensione del sistema lineare: 511
+Tempo per l'assemblaggio: 0.006 s
+Tempo per la soluzione del sistema lineare: 0.007 s
+ 
+Valore di h: 0.125
+Valore di hmax sulla mesh: 0.181194
+Valore di Pe: 1.875
+Stima dell'errore in norma infinito: 1.01138
+Stima dell'errore in norma H1: 6.72726
+Max(ucalcolata - uesatta): 0.00208906
+Dimensione del sistema lineare: 892
+Tempo per l'assemblaggio: 0.016 s
+Tempo per la soluzione del sistema lineare: 0.016 s
+ 
+ try getConsole C:\Users\Bruno\Desktop\Elaborato CAN\03 - ADR FE\adr_upwind.edp

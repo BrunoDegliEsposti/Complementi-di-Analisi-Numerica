@@ -1,0 +1,79 @@
+load "Element_P4"
+
+int[int] Nrho = [10, 14, 20, 28, 40, 57, 80, 113];
+func f = x/(x*x+y*y);
+
+real t0, t1, t2, t3;
+
+// La parametrizzazione deve percorrere il bordo lasciando
+// alla propria sinistra la parte interna del dominio
+border outer(t = 0, 2*pi) {
+	x = 2*cos(t);
+	y = 2*sin(t);
+	label = 1;
+}
+border inner(t = 0, 2*pi) {
+	x = cos(-t);
+	y = sin(-t);
+	label = 2;
+}
+
+// triangolazione di riferimento, usata per avere stime vagamente
+// accurate della norma dell'errore
+mesh Tref = buildmesh(outer(750) + inner(750));
+// La soluzione esatta f viene proiettata su Vref, spazio
+// degli elementi finiti di ordine 4 su Tref
+fespace Vref(Tref, P4);
+Vref u = f;
+
+for (int i = 0; i < Nrho.n; i++) {
+	int Ntheta = round(2*pi*Nrho[i]);
+	t0 = clock();
+	mesh Th = buildmesh(outer(Ntheta) + inner(Ntheta));
+	fespace Vh(Th, P1);
+	Vh uh, vh;
+	problem laplace(uh,vh) = int2d(Th)(dx(uh)*dx(vh)+dy(uh)*dy(vh))
+		+ on(1, uh=f)		// label di outer: 1
+		+ on(2, uh=f);		// label di inner: 2
+	t1 = clock();
+
+	t2 = clock();
+	// soluzione del sistema lineare
+	laplace;
+	// ora uh contiene la soluzione approssimata
+	t3 = clock();
+
+	Vref e = uh-u;
+	real einf = e[].linfty;
+	real eL2 = sqrt(int2d(Tref,qforder=10)(e^2));
+	real eH1 = sqrt(int2d(Tref,qforder=10)(e^2+dx(e)^2+dy(e)^2));
+
+	cout << "Elementi finiti di grado 1" << endl;
+	cout << "Ntheta: " << Ntheta << endl;
+	cout << "hmax: " << Th.hmax << endl;
+	cout << "hmin/hmax: " << Th.hmin/Th.hmax << endl;
+	cout << "Errore in norma infinito: " << einf << endl;
+	cout << "Errore in norma L2: " << eL2 << endl;
+	cout << "Errore in norma H1: " << eH1 << endl;
+	cout << "Numero di vertici nella mesh: " << Th.nv << endl;
+	cout << "Dimensione del sistema lineare: " << Vh.ndof << endl;
+	cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+	cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl;
+
+	/*
+	plot(uh, wait=1, cmm="Soluzione uh");
+	plot(e,  wait=1, cmm="Errore uh-u");
+	*/
+
+	/*
+	verbosity = 0;
+	cout << Ntheta << " & \\num{";
+	cout.scientific;
+	cout.precision(2);
+	cout << Th.hmax << "} & \\num{" << Th.hmin/Th.hmax << "} & \\num{";
+	cout << einf << "} & \\num{" << eL2 << "} & \\num{" << eH1;
+	cout << "} & " << Vh.ndof << " & \\num{";
+	cout.precision(1);
+	cout << t1-t0 << "} & \\num{" << t3-t2 << "} \\\\ %" << Nrho[i] << endl;
+	*/
+}

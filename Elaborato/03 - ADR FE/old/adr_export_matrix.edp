@@ -1,0 +1,89 @@
+real mu = 1;
+real bx = 100;
+real by = 0;
+real bnorm = sqrt(bx*bx+by*by);
+real bxn = bx/bnorm;
+real byn = by/bnorm;
+real sigma = 1;
+real t0, t1;
+
+/* Tutti i bordi sono già orientati correttamente */
+
+border left(t = -3, 3) {
+	x = -1;
+	y = -t;
+	label = 1;
+}
+
+border down(t = -1, 1) {
+	x = t;
+	y = t-2;
+	label = 2;
+}
+
+border right(t = -1, 1) {
+	x = 1;
+	y = t;
+	label = 3;
+}
+
+border up(t = -1, 1) {
+	x = -t;
+	y = t+2;
+	label = 4;
+}
+
+func real phi(real pe) {
+	return pe - 1 + 2*pe/(exp(2*pe)-1);
+}
+
+real h = 0.05; //non conviene scendere sotto 0.025
+t0 = clock();
+mesh Th = buildmesh(left(15) + down(7) + right(5) + up(7));
+Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+fespace Vh(Th, P2);
+Vh u, v;
+real pe = bnorm*h/(2*mu);
+real muupwind = mu*(1+phi(pe));
+varf adr(u,v)
+    = int2d(Th)(mu*(dx(u)*dx(v)+dy(u)*dy(v)))
+    /* Il vettore b deve comparire normalizzato nei termini relativi alla streamline diffusion */
+    + int2d(Th)(mu*phi(pe)*(bxn*dx(u)+byn*dy(u))*(bxn*dx(v)+byn*dy(v)))
+    - int1d(Th, 2, 4)(mu*phi(pe)*v*(bxn*dx(u)+byn*dy(u))*(bxn*N.x+byn*N.y))
+    + int2d(Th)((bx*dx(u)+by*dy(u))*v)
+    + int2d(Th)(sigma*u*v)
+	+ on(1, u=+1)
+	+ on(3, u=-1);
+matrix A = adr(Vh, Vh);
+t1 = clock();
+
+int[int] I, J;
+real[int] C;
+[I, J, C] = A;
+ofstream output("stiffness_matrix_COO.m");
+output.precision(16);
+output.scientific;
+output << "I = [";
+for (int i = 0; i < I.n; i++) {
+	output << I[i]+1 << " ";
+}
+output << "];" << endl;
+output << "J = [";
+for (int i = 0; i < J.n; i++) {
+	output << J[i]+1 << " ";
+}
+output << "];" << endl;
+output << "V = [";
+for (int i = 0; i < C.n; i++) {
+	output << C[i] << " ";
+}
+output << "];" << endl;
+output << "A = sparse(I,J,V," << A.n << "," << A.m << ");" << endl;
+output << "[row, col] = find(A>1e20);" << endl; //tgv = 1e30, di solito
+output << "A_no_tgv = A; A_no_tgv(row,:) = []; A_no_tgv(:,col) = [];" << endl;
+
+cout << "Valore di h: " << h << endl;
+cout << "Valore di phi(pe): " << phi(pe) << endl;
+cout << "Dimensione di Vh: " << Vh.ndof << endl;
+cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;

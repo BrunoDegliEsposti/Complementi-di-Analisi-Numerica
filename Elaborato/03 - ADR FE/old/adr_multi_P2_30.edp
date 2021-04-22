@@ -1,0 +1,218 @@
+real mu = 1;
+real bx = 30;
+real by = 0;
+real bnorm = sqrt(bx*bx+by*by);
+real bxn = bx/bnorm;
+real byn = by/bnorm;
+real sigma = 1;
+real t0, t1, t2, t3;
+
+/* Tutti i bordi sono già orientati correttamente in senso antiorario */
+border left(t = -3, 3)  {x = -1; y = -t;  label = 1;}
+border down(t = -1, 1)  {x = t;  y = t-2; label = 2;}
+border right(t = -1, 1) {x = 1;  y = t;   label = 3;}
+border up(t = -1, 1)    {x = -t; y = t+2; label = 4;}
+
+mesh Th0 = buildmesh(left(60) + down(28) + right(40) + up(28));
+fespace Vh0(Th0, P2);
+Vh0 u0, v0;
+problem adr(u0,v0)
+	= int2d(Th0)(mu*(dx(u0)*dx(v0)+dy(u0)*dy(v0)))
+	+ int2d(Th0)((bx*dx(u0)+by*dy(u0))*v0)
+	+ int2d(Th0)(sigma*u0*v0)
+	+ on(1, u0=+1)
+	+ on(3, u0=-1);
+adr;
+Th0 = adaptmesh(Th0, u0, err=0.001, nbvx=1000000);
+adr;
+Th0 = adaptmesh(Th0, u0, hmax=0.01, thetamax=25, err=0.0001, keepbackvertices=false, nbvx=1000000);
+adr;
+
+func real phi(real pe) {
+	return pe - 1 + 2*pe/(exp(2*pe)-1);
+}
+
+for (real h = 0.5; h > 0.01; h=0.7*h) {
+	cout << "Metodo di Galerkin standard" << endl;
+	cout << "Elementi P2" << endl;
+	t0 = clock();
+	mesh Th = buildmesh(left(15) + down(7) + right(5) + up(7));
+	Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+	Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+	fespace Vh(Th, P2);
+	Vh u, v;
+	real pe = bnorm*h/(2*mu);
+	problem adr(u,v)
+	    = int2d(Th)(mu*(dx(u)*dx(v)+dy(u)*dy(v)))
+	    + int2d(Th)((bx*dx(u)+by*dy(u))*v)
+	    + int2d(Th)(sigma*u*v)
+		+ on(1, u=+1)
+		+ on(3, u=-1);
+	t1 = clock();
+
+	t2 = clock();
+	adr;
+	t3 = clock();
+
+	Vh0 uInVh0 = u;
+	Vh0 e = uInVh0-u0;
+	real errL2 = sqrt(int2d(Th0)(e^2));
+	real errLinf = e[].linfty;
+	cout << "Valore di h: " << h << endl;
+	cout << "Valore di Pe: " << pe << endl;
+	cout << "Dimensione di Vh: " << Vh.ndof << endl;
+	cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+	cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl;
+	cout << "Stima dell'errore in norma L2: " << errL2 << endl;
+	//cout << "Max(ucalcolata - uesatta): " << e[].max << endl;
+	cout << "Stima dell'errore in norma Linf: " << errLinf << endl << endl;
+	//plot(u, wait=1, fill=1, cmm="Valore di h: " + h);
+}
+
+for (real h = 0.5; h > 0.01; h=0.7*h) {
+	cout << "Viscosita' artificiale di tipo upwind" << endl;
+	cout << "Elementi P2" << endl;
+	t0 = clock();
+	mesh Th = buildmesh(left(15) + down(7) + right(5) + up(7));
+	Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+	Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+	fespace Vh(Th, P2);
+	Vh u, v;
+	real pe = bnorm*h/(2*mu);
+	real muupwind = mu*(1+pe);
+	problem adr(u,v)
+	    = int2d(Th)(muupwind*(dx(u)*dx(v)+dy(u)*dy(v)))
+	    + int2d(Th)((bx*dx(u)+by*dy(u))*v)
+	    + int2d(Th)(sigma*u*v)
+		+ on(1, u=+1)
+		+ on(3, u=-1);
+	t1 = clock();
+
+	t2 = clock();
+	adr;
+	t3 = clock();
+
+	Vh0 uInVh0 = u;
+	Vh0 e = uInVh0-u0;
+	real errL2 = sqrt(int2d(Th0)(e^2));
+	real errLinf = e[].linfty;
+	cout << "Valore di h: " << h << endl;
+	cout << "Valore di Pe: " << pe << endl;
+	cout << "Dimensione di Vh: " << Vh.ndof << endl;
+	cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+	cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl;
+	cout << "Stima dell'errore in norma L2: " << errL2 << endl;
+	cout << "Stima dell'errore in norma Linf: " << errLinf << endl << endl;
+}
+
+for (real h = 0.5; h > 0.01; h=0.7*h) {
+	cout << "Viscosita' artificiale di tipo Scharfetter-Gummel" << endl;
+	cout << "Elementi P2" << endl;
+	t0 = clock();
+	mesh Th = buildmesh(left(15) + down(7) + right(5) + up(7));
+	Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+	Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+	fespace Vh(Th, P2);
+	Vh u, v;
+	real pe = bnorm*h/(2*mu);
+	real muSG = mu*(1+phi(pe));
+	problem adr(u,v)
+	    = int2d(Th)(muSG*(dx(u)*dx(v)+dy(u)*dy(v)))
+	    + int2d(Th)((bx*dx(u)+by*dy(u))*v)
+	    + int2d(Th)(sigma*u*v)
+		+ on(1, u=+1)
+		+ on(3, u=-1);
+	t1 = clock();
+
+	t2 = clock();
+	adr;
+	t3 = clock();
+
+	Vh0 uInVh0 = u;
+	Vh0 e = uInVh0-u0;
+	real errL2 = sqrt(int2d(Th0)(e^2));
+	real errLinf = e[].linfty;
+	cout << "Valore di h: " << h << endl;
+	cout << "Valore di phi(pe): " << phi(pe) << endl;
+	cout << "Dimensione di Vh: " << Vh.ndof << endl;
+	cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+	cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl;
+	cout << "Stima dell'errore in norma L2: " << errL2 << endl;
+	cout << "Stima dell'errore in norma Linf: " << errLinf << endl << endl;
+}
+
+for (real h = 0.5; h > 0.01; h=0.7*h) {
+	cout << "Streamline diffusion standard" << endl;
+	cout << "Elementi P2" << endl;
+	t0 = clock();
+	mesh Th = buildmesh(left(15) + down(7) + right(5) + up(7));
+	Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+	Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+	fespace Vh(Th, P2);
+	Vh u, v;
+	real pe = bnorm*h/(2*mu);
+	problem adr(u,v)
+	    = int2d(Th)(mu*(dx(u)*dx(v)+dy(u)*dy(v)))
+	    /* Il vettore b deve comparire normalizzato nei termini relativi alla streamline diffusion */
+	    + int2d(Th)(mu*pe*(bxn*dx(u)+byn*dy(u))*(bxn*dx(v)+byn*dy(v)))
+	    - int1d(Th, 2, 4)(mu*pe*v*(bxn*dx(u)+byn*dy(u))*(bxn*N.x+byn*N.y))
+	    + int2d(Th)((bx*dx(u)+by*dy(u))*v)
+	    + int2d(Th)(sigma*u*v)
+		+ on(1, u=+1)
+		+ on(3, u=-1);
+	t1 = clock();
+
+	t2 = clock();
+	adr;
+	t3 = clock();
+
+	Vh0 uInVh0 = u;
+	Vh0 e = uInVh0-u0;
+	real errL2 = sqrt(int2d(Th0)(e^2));
+	real errLinf = e[].linfty;
+	cout << "Valore di h: " << h << endl;
+	cout << "Valore di Pe: " << pe << endl;
+	cout << "Dimensione di Vh: " << Vh.ndof << endl;
+	cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+	cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl;
+	cout << "Stima dell'errore in norma L2: " << errL2 << endl;
+	cout << "Stima dell'errore in norma Linf: " << errLinf << endl << endl;
+}
+
+for (real h = 0.5; h > 0.01; h=0.7*h) {
+	cout << "Streamline diffusion di tipo Scharfetter-Gummel" << endl;
+	cout << "Elementi P2" << endl;
+	t0 = clock();
+	mesh Th = buildmesh(left(15) + down(7) + right(5) + up(7));
+	Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+	Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+	fespace Vh(Th, P2);
+	Vh u, v;
+	real pe = bnorm*h/(2*mu);
+	problem adr(u,v)
+	    = int2d(Th)(mu*(dx(u)*dx(v)+dy(u)*dy(v)))
+	    /* Il vettore b deve comparire normalizzato nei termini relativi alla streamline diffusion */
+	    + int2d(Th)(mu*phi(pe)*(bxn*dx(u)+byn*dy(u))*(bxn*dx(v)+byn*dy(v)))
+	    - int1d(Th, 2, 4)(mu*phi(pe)*v*(bxn*dx(u)+byn*dy(u))*(bxn*N.x+byn*N.y))
+	    + int2d(Th)((bx*dx(u)+by*dy(u))*v)
+	    + int2d(Th)(sigma*u*v)
+		+ on(1, u=+1)
+		+ on(3, u=-1);
+	t1 = clock();
+
+	t2 = clock();
+	adr;
+	t3 = clock();
+
+	Vh0 uInVh0 = u;
+	Vh0 e = uInVh0-u0;
+	real errL2 = sqrt(int2d(Th0)(e^2));
+	real errLinf = e[].linfty;
+	cout << "Valore di h: " << h << endl;
+	cout << "Valore di phi(pe): " << phi(pe) << endl;
+	cout << "Dimensione di Vh: " << Vh.ndof << endl;
+	cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+	cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl;
+	cout << "Stima dell'errore in norma L2: " << errL2 << endl;
+	cout << "Stima dell'errore in norma Linf: " << errLinf << endl << endl;
+}

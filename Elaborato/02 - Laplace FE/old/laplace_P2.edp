@@ -1,0 +1,69 @@
+int Ntheta = round(2*pi*10);
+func f = x/(x*x+y*y);
+
+real t0, t1, t2, t3;
+
+border outer(t = 0, 2*pi) {
+	x = 2*cos(t);
+	y = 2*sin(t);
+	label = 1;
+}
+
+border inner(t = 0, 2*pi) {
+	x = 1*cos(t);
+	y = 1*sin(t);
+	label = 2;
+}
+
+t0 = clock();
+// costruiamo la mesh. La parametrizzazione deve percorrere
+// il bordo lasciando a sinistra la parte interna.
+// "-N" cambia il verso di percorrenza.
+mesh Th = buildmesh(outer(Ntheta) + inner(-Ntheta));
+fespace Vh(Th, P2);
+Vh uh, vh;
+problem laplace(uh,vh) = int2d(Th)(dx(uh)*dx(vh)+dy(uh)*dy(vh))
+	+ on(1, uh=f)		// 1 si riferisce alla label di outer
+	+ on(2, uh=f);		// 2 si riferisce alla label di inner
+t1 = clock();
+
+t2 = clock();
+laplace;				// il problema viene risolto. uh contiene la soluzione.
+t3 = clock();
+
+mesh Th2 = adaptmesh(Th,hmax=8e-3,nbvx=10000000);
+Th2 = adaptmesh(Th2,hmax=8e-3,nbvx=10000000);
+fespace Vh2(Th2, P4);
+Vh2 uh2 = uh;
+Vh2 u2 = f;
+Vh2 e = uh2-u2;
+real einf = e[].linfty;
+real eL2 = sqrt(int2d(Th2,qforder=10)(e^2));
+real eH1 = sqrt(int2d(Th2,qforder=10)(e^2+dx(e)^2+dy(e)^2));
+
+Vh u = f;
+Vh e = uh-u;
+//plot(e, cmm="Errore uh-u");
+
+cout << "Elementi finiti di grado 2" << endl;
+cout << "Ntheta: " << Ntheta << endl;
+cout << "hmax: " << Th.hmax << endl;
+cout << "hmin/hmax: " << Th.hmin/Th.hmax << endl;
+cout << "Errore in norma infinito: " << e[].linfty << endl;
+cout << "Errore in norma L2: " << sqrt(int2d(Th)(e^2)) << endl;
+cout << "Errore in norma H1: " << sqrt(int2d(Th)(e^2+dx(e)^2+dy(e)^2)) << endl;
+cout << "Numero di vertici nella mesh: " << Th.nv << endl;
+cout << "Dimensione del sistema lineare: " << Vh.ndof << endl;
+cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl;
+
+/*
+cout << Ntheta << " & \\num{";
+cout.scientific;
+cout.precision(2);
+cout << e[].linfty << "} & \\num{" << sqrt(int2d(Th)(e^2));
+cout << "} & \\num{" << sqrt(int2d(Th)(e^2+dx(e)^2+dy(e)^2));
+cout << "} & " << Th.nv << " & " << Vh.ndof << " & \\num{";
+cout.precision(1);
+cout << t1-t0 << "} & \\num{" << t3-t2 << "} \\\\ %" << endl;
+*/

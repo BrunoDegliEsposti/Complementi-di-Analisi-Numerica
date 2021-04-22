@@ -1,0 +1,51 @@
+real h = 0.1;
+real deltat = 0.1;
+real tfinal = 1;
+real theta = 0.5;
+
+border circle(t = 0, 2*pi) {
+	x = cos(t);
+	y = sin(t);
+	label = 1;
+}
+
+func real f(real t) {
+	return (4*t+x^2+y^2+2)/(t+1)^2;
+}
+
+func real uexact(real t) {
+	return (-x^2-y^2+2)/(t+1);
+}
+
+int Nsub = round(2*pi/h);
+mesh Th = buildmesh(circle(Nsub));
+fespace Vh(Th, P2);
+Vh uh, fh, e;
+varf getM(u,v) = int2d(Th)(u*v);
+varf getA(u,v) = int2d(Th)(dx(u)*dx(v)+dy(u)*dy(v)) + int1d(Th,1)(2*u*v);
+varf getf(u,v) = int2d(Th)(fh*v);
+matrix M = getM(Vh,Vh);
+matrix A = getA(Vh,Vh);
+matrix S = M + deltat*theta*A;
+/* https://github.com/FreeFem/FreeFem-sources/issues/102 */
+matrix T = 1*M - deltat*(1-theta)*A;
+set(S, solver=Cholesky, factorize=1);
+//set(S, solver=CG, eps=1e-8);
+
+real[int] vs = 0:40;
+vs *= 0.05;
+uh = -x^2-y^2+2;
+real t = 0;
+while (t < tfinal - 1e-8) {
+	//plot(uh, wait=1, fill=1, viso=vs, cmm="t = " + t);
+	real[int] uh2 = T*uh[];
+	fh = theta*f(t+deltat) + (1-theta)*f(t);
+	real[int] fterm = getf(0,Vh);
+	uh2 += deltat*fterm;
+	uh[] = S^-1*uh2;
+	t += deltat;
+}
+//plot(uh, wait=1, fill=1, viso=vs, cmm="t = " + t);
+e = uh-uexact(t);
+plot(e, wait=1);
+cout << sqrt(int2d(Th)(e^2+dx(e)*dx(e)+dy(e)*dy(e))) << endl;

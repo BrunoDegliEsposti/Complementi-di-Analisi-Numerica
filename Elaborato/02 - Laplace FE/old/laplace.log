@@ -1,0 +1,62 @@
+-- FreeFem++ v  4.200001 (date Sat, Jun 08, 2019  6:08:22 PM git v4.2.1)
+ Load: lg_fem lg_mesh lg_mesh3 eigenvalue
+    1 : int Ntheta = round(2*pi*10);
+    2 : func f = x/(x*x+y*y);
+    3 :
+    4 : real t0, t1, t2, t3;
+    5 :
+    6 : border outer(t = 0, 2*pi) {
+    7 :         x = 2*cos(t);
+    8 :         y = 2*sin(t);
+    9 :         label = 1;
+   10 : }
+   11 :
+   12 : border inner(t = 0, 2*pi) {
+   13 :         x = 1*cos(t);
+   14 :         y = 1*sin(t);
+   15 :         label = 2;
+   16 : }
+   17 :
+   18 : t0 = clock();
+   19 : // costruiamo la mesh. La parametrizzazione deve percorrere
+   20 : // il bordo lasciando a sinistra la parte interna.
+   21 : // "-N" cambia il verso di percorrenza.
+   22 : mesh Th = buildmesh(outer(Ntheta) + inner(-Ntheta));
+   23 : fespace Vh(Th, P1);
+   24 : Vh u, uh, v;
+   25 : problem laplace(uh,v) = int2d(Th)(dx(uh)*dx(v)+dy(uh)*dy(v))
+   26 :         + on(1, uh=f)
+   27 :         + on(2, uh=f);
+   28 : t1 = clock();
+   29 :
+   30 : t2 = clock();
+   31 : laplace;
+   32 : t3 = clock();
+   33 :
+   34 : u = f;
+   35 : Vh e = uh-u;
+   36 : cout << "dimensione = " << Vh.ndof << endl;
+   37 : cout << "tempo assemblaggio = " << t1-t0 << " s" << endl;
+   38 : cout << "tempo algebra lineare = " << t3-t2 << " s" << endl;
+   39 : cout << "linf error = " << e[].linfty << endl;
+   40 : cout << "l2 error = " << e[].l2 << endl;
+   41 : cout << "L2 error = " << sqrt(int2d(Th)(e^2)) << endl;
+   42 : cout << "H1 error = " << sqrt(int2d(Th)(e^2+dx(e)^2+dy(e)^2)) << endl;
+   43 :
+   44 : plot(e, cmm="Errore u-uh"); sizestack + 1024 =2328  ( 1304 )
+ 
+  --  mesh:  Nb of Triangles =    906, Nb of Vertices 516
+  -- Solve :
+          min -0.998757  max 1
+dimensione = 516
+tempo assemblaggio = 0.009 s
+tempo algebra lineare = 0.006 s
+linf error = 0.00115264
+l2 error = 0.00701093
+L2 error = 0.000656822
+H1 error = 0.0139985
+times: compile 0.076s, execution 0.024s,  mpirank:0
+ ######## We forget of deleting   -2 Nb pointer,   0Bytes  ,  mpirank 0, memory leak =0
+ CodeAlloc : nb ptr  3250,  size :420392 mpirank: 0
+Ok: Normal End
+ try getConsole C:\Users\Bruno\Desktop\Elaborato CAN\Laplace FE\laplace.edp

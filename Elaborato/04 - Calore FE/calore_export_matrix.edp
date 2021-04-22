@@ -1,0 +1,64 @@
+load "Element_P4"
+
+real h = 0.1;
+real deltat = 0.1;
+real tfinal = 1;
+real theta = 0.5;
+
+border circle(t = 0, 2*pi) {
+	x = cos(t);
+	y = sin(t);
+	label = 1;
+}
+
+func real f(real t) {
+	return (4*t+x^2+y^2+2)/(t+1)^2;
+}
+
+func real uexact(real t) {
+	return (-x^2-y^2+2)/(t+1);
+}
+
+// Numero di suddivisioni della circonferenza
+int Nsub = round(2*pi/h);
+mesh Th = buildmesh(circle(Nsub));
+fespace Vh(Th, P2);
+Vh uh, fh;
+varf getM(u,v) = int2d(Th)(u*v);
+varf getA(u,v) = int2d(Th)(dx(u)*dx(v)+dy(u)*dy(v)) + int1d(Th,1)(2*u*v);
+varf getf(u,v) = int2d(Th)(fh*v);
+matrix M = getM(Vh,Vh);
+matrix A = getA(Vh,Vh);
+matrix S = M + deltat*theta*A;
+// Senza 1* davanti a M, la matrice T non viene calcolata correttamente.
+// Si tratta di un bug di FreeFem che ho provveduto a segnalare.
+// https://github.com/FreeFem/FreeFem-sources/issues/102
+matrix T = 1*M - deltat*(1-theta)*A;
+// In FreeFEM, la fattorizzazione di Cholesky non genera nuove variabili
+set(S, solver=Cholesky, factorize=1);
+// Alternativa: gradienti coniugati con set(S, solver=CG, eps=1e-10);
+
+// La matrice T viene salvata in formato COO su un file di testo .m
+// direttamente leggibile da Matlab
+int[int] I, J;
+real[int] C;
+[I, J, C] = T;
+ofstream output("T_matrix_COO.m");
+output.precision(16);
+output.scientific;
+output << "I = [";
+for (int i = 0; i < I.n; i++) {
+	output << I[i]+1 << " ";
+}
+output << "];" << endl;
+output << "J = [";
+for (int i = 0; i < J.n; i++) {
+	output << J[i]+1 << " ";
+}
+output << "];" << endl;
+output << "V = [";
+for (int i = 0; i < C.n; i++) {
+	output << C[i] << " ";
+}
+output << "];" << endl;
+output << "T = sparse(I,J,V," << T.n << "," << T.m << ");" << endl;

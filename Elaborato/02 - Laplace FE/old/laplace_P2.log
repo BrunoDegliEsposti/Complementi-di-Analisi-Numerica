@@ -1,0 +1,82 @@
+-- FreeFem++ v  4.200001 (date Sat, Jun 08, 2019  6:08:22 PM git v4.2.1)
+ Load: lg_fem lg_mesh lg_mesh3 eigenvalue
+    1 : int Ntheta = round(2*pi*113);
+    2 : func f = x/(x*x+y*y);
+    3 :
+    4 : real t0, t1, t2, t3;
+    5 :
+    6 : border outer(t = 0, 2*pi) {
+    7 :         x = 2*cos(t);
+    8 :         y = 2*sin(t);
+    9 :         label = 1;
+   10 : }
+   11 :
+   12 : border inner(t = 0, 2*pi) {
+   13 :         x = 1*cos(t);
+   14 :         y = 1*sin(t);
+   15 :         label = 2;
+   16 : }
+   17 :
+   18 : t0 = clock();
+   19 : // costruiamo la mesh. La parametrizzazione deve percorrere
+   20 : // il bordo lasciando a sinistra la parte interna.
+   21 : // "-N" cambia il verso di percorrenza.
+   22 : mesh Th = buildmesh(outer(Ntheta) + inner(-Ntheta));
+   23 : fespace Vh(Th, P2);
+   24 : Vh uh, vh;
+   25 : problem laplace(uh,vh) = int2d(Th)(dx(uh)*dx(vh)+dy(uh)*dy(vh))
+   26 :         + on(1, uh=f)           // 1 si riferisce alla label di outer
+   27 :         + on(2, uh=f);          // 2 si riferisce alla label di inner
+   28 : t1 = clock();
+   29 :
+   30 : t2 = clock();
+   31 : laplace;                                // il problema viene risolto. uh contiene la soluzione.
+   32 : t3 = clock();
+   33 :
+   34 : Vh u = f;
+   35 : Vh e = uh-u;
+   36 : //plot(e, cmm="Errore uh-u");
+   37 :
+   38 : cout << "Elementi finiti di grado 2" << endl;
+   39 : cout << "Ntheta: " << Ntheta << endl;
+   40 : cout << "hmax: " << Th.hmax << endl;
+   41 : cout << "hmin/hmax: " << Th.hmin/Th.hmax << endl;
+   42 : cout << "Errore in norma infinito: " << e[].linfty << endl;
+   43 : cout << "Errore in norma L2: " << sqrt(int2d(Th)(e^2)) << endl;
+   44 : cout << "Errore in norma H1: " << sqrt(int2d(Th)(e^2+dx(e)^2+dy(e)^2)) << endl;
+   45 : cout << "Numero di vertici nella mesh: " << Th.nv << endl;
+   46 : cout << "Dimensione del sistema lineare: " << Vh.ndof << endl;
+   47 : cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+   48 : cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl;
+   49 :
+   50 : /*
+   51 : cout << Ntheta << " & \\num{";
+   52 : cout.scientific;
+   53 : cout.precision(2);
+   54 : cout << e[].linfty << "} & \\num{" << sqrt(int2d(Th)(e^2));
+   55 : cout << "} & \\num{" << sqrt(int2d(Th)(e^2+dx(e)^2+dy(e)^2));
+   56 : cout << "} & " << Th.nv << " & " << Vh.ndof << " & \\num{";
+   57 : cout.precision(1);
+   58 : cout << t1-t0 << "} & \\num{" << t3-t2 << "} \\\\ %" << endl;
+   59 : */
+   60 :  sizestack + 1024 =2328  ( 1304 )
+ 
+  --  mesh:  Nb of Triangles = 114532, Nb of Vertices 57976
+  -- Solve :
+          min -1  max 1
+Elementi finiti di grado 2
+Ntheta: 710
+hmax: 0.0251633
+hmin/hmax: 0.267365
+Errore in norma infinito: 5.28294e-08
+Errore in norma L2: 1.62563e-08
+Errore in norma H1: 7.00746e-06
+Numero di vertici nella mesh: 57976
+Dimensione del sistema lineare: 230484
+Tempo per l'assemblaggio: 1.399 s
+Tempo per la soluzione del sistema lineare: 3.448 s
+times: compile 0.108s, execution 5.939s,  mpirank:0
+ ######## We forget of deleting   -8 Nb pointer,   0Bytes  ,  mpirank 0, memory leak =0
+ CodeAlloc : nb ptr  3274,  size :420616 mpirank: 0
+Ok: Normal End
+ try getConsole C:\Users\Bruno\Desktop\Elaborato CAN\Laplace FE\laplace_P2.edp

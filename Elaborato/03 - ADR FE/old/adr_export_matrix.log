@@ -1,0 +1,100 @@
+-- FreeFem++ v  4.200001 (date Sat, Jun 08, 2019  6:08:22 PM git v4.2.1)
+ Load: lg_fem lg_mesh lg_mesh3 eigenvalue
+    1 : real mu = 1;
+    2 : real bx = 100;
+    3 : real by = 0;
+    4 : real bnorm = sqrt(bx*bx+by*by);
+    5 : real bxn = bx/bnorm;
+    6 : real byn = by/bnorm;
+    7 : real sigma = 1;
+    8 : real t0, t1;
+    9 :
+   10 : /* Tutti i bordi sono già orientati correttamente */
+   11 :
+   12 : border left(t = -3, 3) {
+   13 :         x = -1;
+   14 :         y = -t;
+   15 :         label = 1;
+   16 : }
+   17 :
+   18 : border down(t = -1, 1) {
+   19 :         x = t;
+   20 :         y = t-2;
+   21 :         label = 2;
+   22 : }
+   23 :
+   24 : border right(t = -1, 1) {
+   25 :         x = 1;
+   26 :         y = t;
+   27 :         label = 3;
+   28 : }
+   29 :
+   30 : border up(t = -1, 1) {
+   31 :         x = -t;
+   32 :         y = t+2;
+   33 :         label = 4;
+   34 : }
+   35 :
+   36 : func real phi(real pe) {
+   37 :         return pe - 1 + 2*pe/(exp(2*pe)-1);
+   38 : }
+   39 :
+   40 : real h = 0.05; //non conviene scendere sotto 0.025
+   41 : t0 = clock();
+   42 : mesh Th = buildmesh(left(15) + down(7) + right(5) + up(7));
+   43 : Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+   44 : Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+   45 : fespace Vh(Th, P2);
+   46 : Vh u, v;
+   47 : real pe = bnorm*h/(2*mu);
+   48 : real muupwind = mu*(1+phi(pe));
+   49 : varf adr(u,v)
+   50 :     = int2d(Th)(mu*(dx(u)*dx(v)+dy(u)*dy(v)))
+   51 :     /* Il vettore b deve comparire normalizzato nei termini relativi alla streamline diffusion */
+   52 :     + int2d(Th)(mu*phi(pe)*(bxn*dx(u)+byn*dy(u))*(bxn*dx(v)+byn*dy(v)))
+   53 :     - int1d(Th, 2, 4)(mu*phi(pe)*v*(bxn*dx(u)+byn*dy(u))*(bxn*N.x+byn*N.y))
+   54 :     + int2d(Th)((bx*dx(u)+by*dy(u))*v)
+   55 :     + int2d(Th)(sigma*u*v)
+   56 :         + on(1, u=+1)
+   57 :         + on(3, u=-1);
+   58 : matrix A = adr(Vh, Vh);
+   59 : t1 = clock();
+   60 :
+   61 : int[int] I, J;
+   62 : real[int] C;
+   63 : [I, J, C] = A;
+   64 : ofstream output("stiffness_matrix_COO.m");
+   65 : output.precision(16);
+   66 : output.scientific;
+   67 : output << "I = [";
+   68 : for (int i = 0; i < I.n; i++) {
+   69 :         output << I[i]+1 << " ";
+   70 : }
+   71 : output << "];" << endl;
+   72 : output << "J = [";
+   73 : for (int i = 0; i < J.n; i++) {
+   74 :         output << J[i]+1 << " ";
+   75 : }
+   76 : output << "];" << endl;
+   77 : output << "V = [";
+   78 : for (int i = 0; i < C.n; i++) {
+   79 :         output << C[i] << " ";
+   80 : }
+   81 : output << "];" << endl;
+   82 : output << "A = sparse(I,J,V," << A.n << "," << A.m << ");" << endl;
+   83 : output << "[row, col] = find(A>1e20);" << endl; //tgv = 1e30, di solito
+   84 : output << "A_no_tgv = A; A_no_tgv(row,:) = []; A_no_tgv(:,co
+  ... : l) = [];" << endl;
+   85 :
+   86 : cout << "Valore di h: " << h << endl;
+   87 : cout << "Valore di phi(pe): " << phi(pe) << endl;
+   88 : cout << "Dimensione di Vh: " << Vh.ndof << endl;
+   89 : cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+   90 :  sizestack + 1024 =4556  ( 3532 )
+ 
+  --  mesh:  Nb of Triangles =    118, Nb of Vertices 77
+Valore di h: 0.05
+Valore di phi(pe): 1.53392
+Dimensione di Vh: 14207
+Tempo per l'assemblaggio: 0.727 s
+ try getConsole C:\Users\Bruno\Desktop\Elaborato CAN\03 - ADR FE\adr_export_matrix.edp

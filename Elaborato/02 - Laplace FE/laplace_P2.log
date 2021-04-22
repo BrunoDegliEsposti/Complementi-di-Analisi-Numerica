@@ -1,0 +1,95 @@
+-- FreeFem++ v  4.200001 (date Sat, Jun 08, 2019  6:08:22 PM git v4.2.1)
+ Load: lg_fem lg_mesh lg_mesh3 eigenvalue
+    1 : load "Element_P4"(load: loadLibary C:\Program Files (x86)\FreeFem++\\.\Element_P4 = 0)
+    2 :
+    3 : int[int] Nrho = [10, 14, 20, 28, 40, 57, 80, 113];
+    4 : func f = x/(x*x+y*y);
+    5 :
+    6 : real t0, t1, t2, t3;
+    7 :
+    8 : // La parametrizzazione deve percorrere il bordo lasciando
+    9 : // alla propria sinistra la parte interna del dominio
+   10 : border outer(t = 0, 2*pi) {
+   11 :         x = 2*cos(t);
+   12 :         y = 2*sin(t);
+   13 :         label = 1;
+   14 : }
+   15 : border inner(t = 0, 2*pi) {
+   16 :         x = cos(-t);
+   17 :         y = sin(-t);
+   18 :         label = 2;
+   19 : }
+   20 :
+   21 : // triangolazione di riferimento, usata per avere stime vagamente
+   22 : // accurate della norma dell'errore
+   23 : mesh Tref = buildmesh(outer(1250) + inner(1250));
+   24 : // La soluzione esatta f viene proiettata su Vref, spazio
+   25 : // degli elementi finiti di ordine 4 su Tref
+   26 : fespace Vref(Tref, P4);
+   27 : Vref u = f;
+   28 :
+   29 : for (int i = 0; i < Nrho.n; i++) {
+   30 :         int Ntheta = round(2*pi*Nrho[i]);
+   31 :         t0 = clock();
+   32 :         mesh Th = buildmesh(outer(Ntheta) + inner(Ntheta));
+   33 :         fespace Vh(Th, P2);
+   34 :         Vh uh, vh;
+   35 :         problem laplace(uh,vh) = int2d(Th)(dx(uh)*dx(vh)+dy(uh)*dy(vh))
+   36 :                 + on(1, uh=f)           // label di outer: 1
+   37 :                 + on(2, uh=f);          // label di inner: 2
+   38 :         t1 = clock();
+   39 :
+   40 :         t2 = clock();
+   41 :         // soluzione del sistema lineare
+   42 :         laplace;
+   43 :         // ora uh contiene la soluzione approssimata
+   44 :         t3 = clock();
+   45 :
+   46 :         Vref e = uh-u;
+   47 :         real einf = e[].linfty;
+   48 :         real eL2 = sqrt(int2d(Tref,qforder=10)(e^2));
+   49 :         real eH1 = sqrt(int2d(Tref,qforder=10)(e^2+dx(e)^2+dy(e)^2));
+   50 :
+   51 :         /*cout << "Elementi finiti di grado 2" << endl;
+   52 :         cout << "Ntheta: " << Ntheta << endl;
+   53 :         cout << "hmax: " << Th.hmax << endl;
+   54 :         cout << "hmin/hmax: " << Th.hmin/Th.hmax << endl;
+   55 :         cout << "Errore in norma infinito: " << einf << endl;
+   56 :         cout << "Errore in norma L2: " << eL2 << endl;
+   57 :         cout << "Errore in norma H1: " << eH1 << endl;
+   58 :         cout << "Numero di vertici nella mesh: " << Th.nv << endl;
+   59 :         cout << "Dimensione del sistema lineare: " << Vh.ndof << endl;
+   60 :         cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+   61 :         cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl;*/
+   62 :
+   63 :         /*
+   64 :         plot(uh, wait=1, cmm="Soluzione uh");
+   65 :         plot(e,  wait=1, cmm="Errore uh-u");
+   66 :         */
+   67 :
+   68 :         //
+   69 :         verbosity = 0;
+   70 :         cout << Ntheta << " & \num{";
+   71 :         cout.scientific;
+   72 :         cout.precision(2);
+   73 :         cout << einf << "} & \num{" << eL2 << "} & \num{" << eH1;
+   74 :         cout << "} & " << Th.nv << " & " << Vh.ndof << " & \num{";
+   75 :         cout.precision(1);
+   76 :         cout << t1-t0 << "} & \num{" << t3-t2 << "} \\ %" << Nrho[i] << endl;
+   77 :         //
+   78 : }
+   79 :  sizestack + 1024 =2616  ( 1592 )
+ 
+  --  mesh:  Nb of Triangles = 376488, Nb of Vertices 189494
+  --  mesh:  Nb of Triangles =    884, Nb of Vertices 505
+  -- Solve :
+          min -1.00124  max 1
+63 & \num{6.22e-04} & \num{1.27e-04} & \num{2.71e-02} & 505 & 1894 & \num{1.0e-02} & \num{1.7e-02} \\ %10
+88 & \num{3.19e-04} & \num{4.54e-05} & \num{1.39e-02} & 983 & 3756 & \num{1.7e-02} & \num{3.4e-02} \\ %14
+126 & \num{1.55e-04} & \num{1.60e-05} & \num{6.73e-03} & 1986 & 7692 & \num{3.5e-02} & \num{7.4e-02} \\ %20
+176 & \num{7.90e-05} & \num{6.41e-06} & \num{3.43e-03} & 3705 & 14468 & \num{6.1e-02} & \num{1.5e-01} \\ %28
+251 & \num{3.92e-05} & \num{2.41e-06} & \num{1.66e-03} & 7695 & 30278 & \num{1.3e-01} & \num{3.5e-01} \\ %40
+358 & \num{1.89e-05} & \num{9.83e-07} & \num{7.92e-04} & 15138 & 59836 & \num{2.7e-01} & \num{7.8e-01} \\ %57
+503 & \num{9.75e-06} & \num{4.12e-07} & \num{3.78e-04} & 32517 & 129062 & \num{6.9e-01} & \num{1.8e+00} \\ %80
+710 & \num{4.87e-06} & \num{1.77e-07} & \num{1.77e-04} & 57982 & 230508 & \num{1.3e+00} & \num{3.5e+00} \\ %113
+ try getConsole C:\Users\Bruno\Desktop\Elaborato CAN\Laplace FE\laplace_P2.edp

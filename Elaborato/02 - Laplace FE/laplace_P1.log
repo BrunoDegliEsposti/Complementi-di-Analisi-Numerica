@@ -1,0 +1,144 @@
+-- FreeFem++ v  4.200001 (date Sat, Jun 08, 2019  6:08:22 PM git v4.2.1)
+ Load: lg_fem lg_mesh lg_mesh3 eigenvalue
+    1 : load "Element_P4"(load: loadLibary C:\Program Files (x86)\FreeFem++\\.\Element_P4 = 0)
+    2 :
+    3 : int[int] Nrho = [10, 14, 20, 28, 40, 57, 80, 113];
+    4 : func f = x/(x*x+y*y);
+    5 :
+    6 : real t0, t1, t2, t3;
+    7 :
+    8 : // La parametrizzazione deve percorrere il bordo lasciando
+    9 : // alla propria sinistra la parte interna del dominio
+   10 : border outer(t = 0, 2*pi) {
+   11 :         x = 2*cos(t);
+   12 :         y = 2*sin(t);
+   13 :         label = 1;
+   14 : }
+   15 : border inner(t = 0, 2*pi) {
+   16 :         x = cos(-t);
+   17 :         y = sin(-t);
+   18 :         label = 2;
+   19 : }
+   20 :
+   21 : // triangolazione di riferimento, usata per avere stime vagamente
+   22 : // accurate della norma dell'errore
+   23 : mesh Tref = buildmesh(outer(750) + inner(750));
+   24 : // La soluzione esatta f viene proiettata su Vref, spazio
+   25 : // degli elementi finiti di ordine 4 su Tref
+   26 : fespace Vref(Tref, P4);
+   27 : Vref u = f;
+   28 :
+   29 : for (int i = 0; i < Nrho.n; i++) {
+   30 :         int Ntheta = round(2*pi*Nrho[i]);
+   31 :         t0 = clock();
+   32 :         mesh Th = buildmesh(outer(Ntheta) + inner(Ntheta));
+   33 :         fespace Vh(Th, P1);
+   34 :         Vh uh, vh;
+   35 :         problem laplace(uh,vh) = int2d(Th)(dx(uh)*dx(vh)+dy(uh)*dy(vh))
+   36 :                 + on(1, uh=f)           // label di outer: 1
+   37 :                 + on(2, uh=f);          // label di inner: 2
+   38 :         t1 = clock();
+   39 :
+   40 :         t2 = clock();
+   41 :         // soluzione del sistema lineare
+   42 :         laplace;
+   43 :         // ora uh contiene la soluzione approssimata
+   44 :         t3 = clock();
+   45 :
+   46 :         Vref e = uh-u;
+   47 :         real einf = e[].linfty;
+   48 :         real eL2 = sqrt(int2d(Tref,qforder=10)(e^2));
+   49 :         real eH1 = sqrt(int2d(Tref,qforder=10)(e^2+dx(e)^2+dy(e)^2));
+   50 :
+   51 :         cout << "Elementi finiti di grado 1" << endl;
+   52 :         cout << "Ntheta: " << Ntheta << endl;
+   53 :         cout << "hmax: " << Th.hmax << endl;
+   54 :         cout << "hmin/hmax: " << Th.hmin/Th.hmax << endl;
+   55 :         cout << "Errore in norma infinito: " << einf << endl;
+   56 :         cout << "Errore in norma L2: " << eL2 << endl;
+   57 :         cout << "Errore in norma H1: " << eH1 << endl;
+   58 :         cout << "Numero di vertici nella mesh: " << Th.nv << endl;
+   59 :         cout << "Dimensione del sistema lineare: " << Vh.ndof << endl;
+   60 :         cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+   61 :         cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl;
+   62 :
+   63 :         /*
+   64 :         plot(uh, wait=1, cmm="Soluzione uh");
+   65 :         plot(e,  wait=1, cmm="Errore uh-u");
+   66 :         */
+   67 :
+   68 :         /*
+   69 :         verbosity = 0;
+   70 :         cout << Ntheta << " & \\num{";
+   71 :         cout.scientific;
+   72 :         cout.precision(2);
+   73 :         cout << Th.hmax << "} & \\num{" << Th.hmin/Th.hmax << "} & \\num{";
+   74 :         cout << einf << "} & \\num{" << eL2 << "} & \\num{" << eH1;
+   75 :         cout << "} & " << Vh.ndof << " & \\num{";
+   76 :         cout.precision(1);
+   77 :         cout << t1-t0 << "} & \\num{" << t3-t2 << "} \\\\ %" << Nrho[i] << endl;
+   78 :         */
+   79 : }
+   80 :  sizestack + 1024 =2616  ( 1592 )
+ 
+  --  mesh:  Nb of Triangles = 128880, Nb of Vertices 65190
+  --  mesh:  Nb of Triangles =    894, Nb of Vertices 510
+  -- Solve :
+          min -0.998757  max 1
+Elementi finiti di grado 1
+Ntheta: 63
+hmax: 0.282339
+hmin/hmax: 0.299103
+Errore in norma infinito: 0.0053019
+Errore in norma L2: 0.00316193
+Errore in norma H1: 0.147763
+Numero di vertici nella mesh: 510
+Dimensione del sistema lineare: 510
+Tempo per l'assemblaggio: 0.008 s
+Tempo per la soluzione del sistema lineare: 0.006 s
+  --  mesh:  Nb of Triangles =   1790, Nb of Vertices 983
+  -- Solve :
+          min -1  max 1
+Elementi finiti di grado 1
+Ntheta: 88
+hmax: 0.199566
+hmin/hmax: 0.304479
+Errore in norma infinito: 0.00256409
+Errore in norma L2: 0.00157067
+Errore in norma H1: 0.103921
+Numero di vertici nella mesh: 983
+Dimensione del sistema lineare: 983
+Tempo per l'assemblaggio: 0.015 s
+Tempo per la soluzione del sistema lineare: 0.008 s
+  --  mesh:  Nb of Triangles =   3720, Nb of Vertices 1986
+  -- Solve :
+          min -1  max 1
+Elementi finiti di grado 1
+Ntheta: 126
+hmax: 0.140547
+hmin/hmax: 0.274739
+Errore in norma infinito: 0.00124245
+Errore in norma L2: 0.000775188
+Errore in norma H1: 0.0724602
+Numero di vertici nella mesh: 1986
+Dimensione del sistema lineare: 1986
+Tempo per l'assemblaggio: 0.027 s
+Tempo per la soluzione del sistema lineare: 0.018 s
+  --  mesh:  Nb of Triangles =   7058, Nb of Vertices 3705
+  -- Solve :
+          min -1  max 1
+Elementi finiti di grado 1
+Ntheta: 176
+hmax: 0.102019
+hmin/hmax: 0.259379
+Errore in norma infinito: 0.000672107
+Errore in norma L2: 0.000405261
+Errore in norma H1: 0.0521786
+Numero di vertici nella mesh: 3705
+Dimensione del sistema lineare: 3705
+Tempo per l'assemblaggio: 0.049 s
+Tempo per la soluzione del sistema lineare: 0.033 s
+  --  mesh:  Nb of Triangles =  14888, Nb of Vertices 7695
+  -- Solve :
+          min -0.999922  max 1
+^ try getConsole C:\Users\Bruno\Desktop\Elaborato CAN\Laplace FE\laplace_P1.edp

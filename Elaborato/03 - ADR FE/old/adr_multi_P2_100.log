@@ -1,0 +1,556 @@
+-- FreeFem++ v  4.200001 (date Sat, Jun 08, 2019  6:08:22 PM git v4.2.1)
+ Load: lg_fem lg_mesh lg_mesh3 eigenvalue 
+    1 : real mu = 1;
+    2 : real bx = 30;
+    3 : real by = 0;
+    4 : real bnorm = sqrt(bx*bx+by*by);
+    5 : real bxn = bx/bnorm;
+    6 : real byn = by/bnorm;
+    7 : real sigma = 1;
+    8 : real t0, t1, t2, t3;
+    9 :
+   10 : /* Tutti i bordi sono già orientati correttamente in senso antiorario */
+   11 : border left(t = -3, 3)  {x = -1; y = -t;  label = 1;}
+   12 : border down(t = -1, 1)  {x = t;  y = t-2; label = 2;}
+   13 : border right(t = -1, 1) {x = 1;  y = t;   label = 3;}
+   14 : border up(t = -1, 1)    {x = -t; y = t+2; label = 4;}
+   15 :
+   16 : // Costruzione di una soluzione di riferimento
+   17 : mesh Tref = buildmesh(left(60) + down(28) + right(40) + up(28));
+   18 : fespace Vref(Tref, P2);
+   19 : Vref u, v;
+   20 : problem adr(u,v)
+   21 :         = int2d(Tref)(mu*(dx(u)*dx(v)+dy(u)*dy(v)))
+   22 :         + int2d(Tref)((bx*dx(u)+by*dy(u))*v)
+   23 :         + int2d(Tref)(sigma*u*v)
+   24 :         + on(1, u=+1)
+   25 :         + on(3, u=-1);
+   26 : adr;
+   27 : Tref = adaptmesh(Tref, u, hmax=0.1, err=0.001, nbvx=10000000);
+   28 : adr;    // Ricalcolo della soluzione dopo il primo adattamento
+   29 : Tref = adaptmesh(Tref, u, hmax=0.01, err=0.0001, nbvx=10000000);
+   30 : adr;    // Ricalcolo della soluzione dopo il secondo adattamento
+   31 :
+   32 : // Funzione di supporto per il metodo di Scharfetter-Gummel
+   33 : func real phi(real pe) {
+   34 :         return pe - 1 + 2*pe/(exp(2*pe)-1);
+   35 : }
+   36 :
+   37 : for (real h = 0.5; h > 0.01; h *= 0.5) {
+   38 :         cout << "Metodo di Galerkin standard" << endl;
+   39 :         cout << "Elementi P1" << endl;
+   40 :         t0 = clock();
+   41 :         int n = round(1/h);
+   42 :         mesh Th = buildmesh(left(6*n) + down(3*n) + right(4*n) + up(3*n));
+   43 :         fespace Vh(Th, P1);
+   44 :         Vh uh, vh;
+   45 :         real pe = bnorm*h/(2*mu);
+   46 :         problem adr(uh,vh)
+   47 :             = int2d(Th)(mu*(dx(uh)*dx(vh)+dy(uh)*dy(vh)))
+   48 :             + int2d(Th)((bx*dx(uh)+by*dy(uh))*vh)
+   49 :             + int2d(Th)(sigma*uh*vh)
+   50 :                 + on(1, uh=+1)
+   51 :                 + on(3, uh=-1);
+   52 :         t1 = clock();
+   53 :
+   54 :         t2 = clock();
+   55 :         adr;
+   56 :         t3 = clock();
+   57 :
+   58 :         Vref e = uh - u;
+   59 :         real einf = e[].linfty;
+   60 :         real eH1 = sqrt(int2d(Tref)(e^2+dx(e)^2+dy(e)^2));
+   61 :
+   62 :         cout << "Valore di h: " << h << endl;
+   63 :         cout << "Valore di hmax sulla mesh: " << Th.hmax << endl;
+   64 :         cout << "Valore di Pe: " << pe << endl;
+   65 :         cout << "Stima dell'errore in norma infinito: " << einf << endl;
+   66 :         cout << "Stima dell'errore in norma H1: " << eH1 << endl;
+   67 :         cout << "Max(ucalcolata - uesatta): " << e[].max << endl;
+   68 :         cout << "Dimensione del sistema lineare: " << Vh.ndof << endl;
+   69 :         cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+   70 :         cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl << endl;
+   71 :         //plot(u, wait=1, fill=1, cmm="Valore di h: " + h);
+   72 : }
+   73 :
+   74 : for (real h = 0.5; h > 0.01; h *= 0.5) {
+   75 :         cout << "Viscosita' artificiale di tipo upwind" << endl;
+   76 :         cout << "Elementi P1" << endl;
+   77 :         t0 = clock();
+   78 :         int n = round(1/h);
+   79 :         mesh Th = buildmesh(left(6*n) + down(3*n) + right(4*n) + up(3*n));
+   80 :         fespace Vh(Th, P1);
+   81 :         Vh uh, vh;
+   82 :         real pe = bnorm*h/(2*mu);
+   83 :         real muupwind = mu*(1+pe);
+   84 :         problem adr(uh,vh)
+   85 :             = int2d(Th)(muupwind*(dx(uh)*dx(vh)+dy(uh)*dy(vh)))
+   86 :             + int2d(Th)((bx*dx(uh)+by*dy(uh))*vh)
+   87 :             + int2d(Th)(sigma*uh*vh)
+   88 :                 + on(1, uh=+1)
+   89 :                 + on(3, uh=-1);
+   90 :         t1 = clock();
+   91 :
+   92 :         t2 = clock();
+   93 :         adr;
+   94 :         t3 = clock();
+   95 :
+   96 :         Vref e = uh - u;
+   97 :         real einf = e[].linfty;
+   98 :         real eH1 = sqrt(int2d(Tref)(e^2+dx(e)^2+dy(e)^2));
+   99 :
+  100 :         cout << "Valore di h: " << h << endl;
+  101 :         cout << "Valore di Pe: " << pe << endl;
+  102 :         cout << "Stima dell'errore in norma infinito: " << einf << endl;
+  103 :         cout << "Stima dell'errore in norma H1: " << eH1 << endl;
+  104 :         cout << "Max(ucalcolata - uesatta): " << e[].max << endl;
+  105 :         cout << "Dimensione del sistema lineare: " << Vh.ndof << endl;
+  106 :         cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+  107 :         cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl << endl;
+  108 :         //plot(e, wait=1, fill=1, cmm="Valore di h: " + h);
+  109 : }
+  110 :
+  111 : for (real h = 0.5; h > 0.01; h *= 0.5) {
+  112 :         cout << "Viscosita' artificiale di tipo Scharfetter-Gummel
+  ... : " << endl;
+  113 :         cout << "Elementi P1" << endl;
+  114 :         t0 = clock();
+  115 :         int n = round(1/h);
+  116 :         mesh Th = buildmesh(left(6*n) + down(3*n) + right(4*n) + up(3*n));
+  117 :         fespace Vh(Th, P1);
+  118 :         Vh uh, vh;
+  119 :         real pe = bnorm*h/(2*mu);
+  120 :         real muSG = mu*(1+phi(pe));
+  121 :         problem adr(uh,vh)
+  122 :             = int2d(Th)(muSG*(dx(uh)*dx(vh)+dy(uh)*dy(vh)))
+  123 :             + int2d(Th)((bx*dx(uh)+by*dy(uh))*vh)
+  124 :             + int2d(Th)(sigma*uh*vh)
+  125 :                 + on(1, uh=+1)
+  126 :                 + on(3, uh=-1);
+  127 :         t1 = clock();
+  128 :
+  129 :         t2 = clock();
+  130 :         adr;
+  131 :         t3 = clock();
+  132 :
+  133 :         Vref e = uh - u;
+  134 :         real einf = e[].linfty;
+  135 :         real eH1 = sqrt(int2d(Tref)(e^2+dx(e)^2+dy(e)^2));
+  136 :
+  137 :         cout << "Valore di h: " << h << endl;
+  138 :         cout << "Valore di Pe: " << pe << endl;
+  139 :         cout << "Stima dell'errore in norma infinito: " << einf << endl;
+  140 :         cout << "Stima dell'errore in norma H1: " << eH1 << endl;
+  141 :         cout << "Max(ucalcolata - uesatta): " << e[].max << endl;
+  142 :         cout << "Dimensione del sistema lineare: " << Vh.ndof << endl;
+  143 :         cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+  144 :         cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl << endl;
+  145 :         //plot(e, wait=1, fill=1, cmm="Valore di h: " + h);
+  146 : }
+  147 :
+  148 : for (real h = 0.5; h > 0.01; h *= 0.5) {
+  149 :         cout << "Streamline diffusion" << endl;
+  150 :         cout << "Elementi P1" << endl;
+  151 :         t0 = clock();
+  152 :         int n = round(1/h);
+  153 :         mesh Th = buildmesh(left(6*n) + down(3*n) + right(4*n) + up(3*n));
+  154 :         fespace Vh(Th, P1);
+  155 :         Vh uh, vh;
+  156 :         real pe = bnorm*h/(2*mu);
+  157 :         problem adr(uh,vh)
+  158 :             = int2d(Th)(mu*(dx(uh)*dx(vh)+dy(uh)*dy(vh)))
+  159 :             /* Il vettore b deve comparire normalizzato nei termini relativi alla streamline diffusion */
+  160 :             + int2d(Th)(mu*pe*(bxn*dx(uh)+byn*dy(uh))*(bxn*dx(vh)+byn*dy(vh)))
+  161 :             - int1d(Th, 2, 4)(mu*pe*vh*(bxn*dx(uh)+byn*dy(uh))*(bxn*N.x+byn*N.y))
+  162 :             + int2d(Th)((bx*dx(uh)+by*dy(uh))*vh)
+  163 :             + int2d(Th)(sigma*uh*vh)
+  164 :                 + on(1, uh=+1)
+  165 :                 + on(3, uh=-1);
+  166 :         t1 = clock();
+  167 :
+  168 :         t2 = clock();
+  169 :         adr;
+  170 :         t3 = clock();
+  171 :
+  172 :         Vref e = uh - u;
+  173 :         real einf = e[].linfty;
+  174 :         real eH1 = sqrt(int2d(Tref)(e^2+dx(e)^2+dy(e)^2));
+  175 :
+  176 :         cout << "Valore di h: " << h << endl;
+  177 :         cout << "Valore di Pe: " << pe << endl;
+  178 :         cout << "Stima dell'errore in norma infinito: " << einf << endl;
+  179 :         cout << "Stima dell'errore in norma H1: " << eH1 << endl;
+  180 :         cout << "Max(ucalcolata - uesatta): " << e[].max << endl;
+  181 :         cout << "Dimensione del sistema lineare: " << Vh.ndof << endl;
+  182 :         cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+  183 :         cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl << endl;
+  184 :         //plot(u, wait=1, fill=1, cmm="Valore di h: " + h);
+  185 : }
+  186 :  sizestack + 1024 =8064  ( 7040 )
+ 
+  --  mesh:  Nb of Triangles =   2482, Nb of Vertices 1320
+  -- Solve :
+          min -1  max 1
+  number of required edges : 0
+  -- adaptmesh Regulary:  Nb triangles 7851 , h  min 0.00327974 , h max 0.140823
+     area =  8 , M area = 3514.84 , M area/( |Khat| nt) 1.0339
+     infiny-regulaty:  min 0.327196  max 2.23542
+     anisomax  30.0678, beta max = 1.71757 min  0.75404
+  --  mesh:  Nb of Triangles =   7851, Nb of Vertices 4084
+  -- Solve :
+          min -1  max 1
+  number of required edges : 0
+  -- adaptmesh Regulary:  Nb triangles 268511 , h  min 0.000327032 , h max 0.019188
+     area =  8 , M area = 117843 , M area/( |Khat| nt) 1.01354
+     infiny-regulaty:  min 0.386901  max 2.17028
+     anisomax  38.6962, beta max = 1.37908 min  0.713383
+  --  mesh:  Nb of Triangles = 268511, Nb of Vertices 135129
+  -- Solve :
+          min -1  max 1
+Metodo di Galerkin standard
+Elementi P1
+  --  mesh:  Nb of Triangles =    100, Nb of Vertices 67
+  -- Solve :
+          min -1  max 2.92885
+Valore di h: 0.5
+Valore di hmax sulla mesh: 0.708103
+Valore di Pe: 7.5
+Stima dell'errore in norma infinito: 1.96892
+Stima dell'errore in norma H1: 12.2128
+Max(ucalcolata - uesatta): 1.96892
+Dimensione del sistema lineare: 67
+Tempo per l'assemblaggio: 0.001 s
+Tempo per la soluzione del sistema lineare: 0.001 s
+ 
+Metodo di Galerkin standard
+Elementi P1
+  --  mesh:  Nb of Triangles =    394, Nb of Vertices 230
+  -- Solve :
+          min -1  max 1.98762
+Valore di h: 0.25
+Valore di hmax sulla mesh: 0.359639
+Valore di Pe: 3.75
+Stima dell'errore in norma infinito: 1.15976
+Stima dell'errore in norma H1: 9.12435
+Max(ucalcolata - uesatta): 1.07459
+Dimensione del sistema lineare: 230
+Tempo per l'assemblaggio: 0.003 s
+Tempo per la soluzione del sistema lineare: 0.003 s
+ 
+Metodo di Galerkin standard
+Elementi P1
+  --  mesh:  Nb of Triangles =   1654, Nb of Vertices 892
+  -- Solve :
+          min -1  max 1.19556
+Valore di h: 0.125
+Valore di hmax sulla mesh: 0.181194
+Valore di Pe: 1.875
+Stima dell'errore in norma infinito: 0.849446
+Stima dell'errore in norma H1: 5.48297
+Max(ucalcolata - uesatta): 0.409648
+Dimensione del sistema lineare: 892
+Tempo per l'assemblaggio: 0.011 s
+Tempo per la soluzione del sistema lineare: 0.012 s
+ 
+Metodo di Galerkin standard
+Elementi P1
+  --  mesh:  Nb of Triangles =   6354, Nb of Vertices 3306
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.0625
+Valore di hmax sulla mesh: 0.0989399
+Valore di Pe: 0.9375
+Stima dell'errore in norma infinito: 0.56756
+Stima dell'errore in norma H1: 3.08055
+Max(ucalcolata - uesatta): 0.12839
+Dimensione del sistema lineare: 3306
+Tempo per l'assemblaggio: 0.034 s
+Tempo per la soluzione del sistema lineare: 0.047 s
+ 
+Metodo di Galerkin standard
+Elementi P1
+  --  mesh:  Nb of Triangles =  25820, Nb of Vertices 13167
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.03125
+Valore di hmax sulla mesh: 0.0485874
+Valore di Pe: 0.46875
+Stima dell'errore in norma infinito: 0.354722
+Stima dell'errore in norma H1: 1.68692
+Max(ucalcolata - uesatta): 0.0396921
+Dimensione del sistema lineare: 13167
+Tempo per l'assemblaggio: 0.14 s
+Tempo per la soluzione del sistema lineare: 0.212 s
+ 
+Metodo di Galerkin standard
+Elementi P1
+  --  mesh:  Nb of Triangles = 103182, Nb of Vertices 52104
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.015625
+Valore di hmax sulla mesh: 0.026419
+Valore di Pe: 0.234375
+Stima dell'errore in norma infinito: 0.219994
+Stima dell'errore in norma H1: 0.929968
+Max(ucalcolata - uesatta): 0.00851768
+Dimensione del sistema lineare: 52104
+Tempo per l'assemblaggio: 0.691 s
+Tempo per la soluzione del sistema lineare: 0.948 s
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+  --  mesh:  Nb of Triangles =    100, Nb of Vertices 67
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.5
+Valore di Pe: 7.5
+Stima dell'errore in norma infinito: 1.52067
+Stima dell'errore in norma H1: 9.77112
+Max(ucalcolata - uesatta): 0.00613231
+Dimensione del sistema lineare: 67
+Tempo per l'assemblaggio: 0.001 s
+Tempo per la soluzione del sistema lineare: 0.001 s
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+  --  mesh:  Nb of Triangles =    394, Nb of Vertices 230
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.25
+Valore di Pe: 3.75
+Stima dell'errore in norma infinito: 1.29304
+Stima dell'errore in norma H1: 8.58265
+Max(ucalcolata - uesatta): 0.00391989
+Dimensione del sistema lineare: 230
+Tempo per l'assemblaggio: 0.003 s
+Tempo per la soluzione del sistema lineare: 0.004 s
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+  --  mesh:  Nb of Triangles =   1654, Nb of Vertices 892
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.125
+Valore di Pe: 1.875
+Stima dell'errore in norma infinito: 1.01138
+Stima dell'errore in norma H1: 6.72726
+Max(ucalcolata - uesatta): 0.00208906
+Dimensione del sistema lineare: 892
+Tempo per l'assemblaggio: 0.009 s
+Tempo per la soluzione del sistema lineare: 0.013 s
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+  --  mesh:  Nb of Triangles =   6354, Nb of Vertices 3306
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.0625
+Valore di Pe: 0.9375
+Stima dell'errore in norma infinito: 0.704716
+Stima dell'errore in norma H1: 4.70874
+Max(ucalcolata - uesatta): 0.00106497
+Dimensione del sistema lineare: 3306
+Tempo per l'assemblaggio: 0.034 s
+Tempo per la soluzione del sistema lineare: 0.047 s
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+  --  mesh:  Nb of Triangles =  25820, Nb of Vertices 13167
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.03125
+Valore di Pe: 0.46875
+Stima dell'errore in norma infinito: 0.440813
+Stima dell'errore in norma H1: 2.95823
+Max(ucalcolata - uesatta): 0.000533292
+Dimensione del sistema lineare: 13167
+Tempo per l'assemblaggio: 0.138 s
+Tempo per la soluzione del sistema lineare: 0.206 s
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+  --  mesh:  Nb of Triangles = 103182, Nb of Vertices 52104
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.015625
+Valore di Pe: 0.234375
+Stima dell'errore in norma infinito: 0.261604
+Stima dell'errore in norma H1: 1.71342
+Max(ucalcolata - uesatta): 0.000265227
+Dimensione del sistema lineare: 52104
+Tempo per l'assemblaggio: 0.694 s
+Tempo per la soluzione del sistema lineare: 0.911 s
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+  --  mesh:  Nb of Triangles =    100, Nb of Vertices 67
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.5
+Valore di Pe: 7.5
+Stima dell'errore in norma infinito: 1.5091
+Stima dell'errore in norma H1: 9.71188
+Max(ucalcolata - uesatta): 0.0063503
+Dimensione del sistema lineare: 67
+Tempo per l'assemblaggio: 0.001 s
+Tempo per la soluzione del sistema lineare: 0.001 s
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+  --  mesh:  Nb of Triangles =    394, Nb of Vertices 230
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.25
+Valore di Pe: 3.75
+Stima dell'errore in norma infinito: 1.26102
+Stima dell'errore in norma H1: 8.30677
+Max(ucalcolata - uesatta): 0.00311811
+Dimensione del sistema lineare: 230
+Tempo per l'assemblaggio: 0.003 s
+Tempo per la soluzione del sistema lineare: 0.003 s
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+  --  mesh:  Nb of Triangles =   1654, Nb of Vertices 892
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.125
+Valore di Pe: 1.875
+Stima dell'errore in norma infinito: 0.941995
+Stima dell'errore in norma H1: 5.77182
+Max(ucalcolata - uesatta): 0.00116559
+Dimensione del sistema lineare: 892
+Tempo per l'assemblaggio: 0.009 s
+Tempo per la soluzione del sistema lineare: 0.013 s
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+  --  mesh:  Nb of Triangles =   6354, Nb of Vertices 3306
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.0625
+Valore di Pe: 0.9375
+Stima dell'errore in norma infinito: 0.612934
+Stima dell'errore in norma H1: 3.24061
+Max(ucalcolata - uesatta): 0.00220691
+Dimensione del sistema lineare: 3306
+Tempo per l'assemblaggio: 0.034 s
+Tempo per la soluzione del sistema lineare: 0.047 s
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+  --  mesh:  Nb of Triangles =  25820, Nb of Vertices 13167
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.03125
+Valore di Pe: 0.46875
+Stima dell'errore in norma infinito: 0.36899
+Stima dell'errore in norma H1: 1.71259
+Max(ucalcolata - uesatta): 0.00010888
+Dimensione del sistema lineare: 13167
+Tempo per l'assemblaggio: 0.142 s
+Tempo per la soluzione del sistema lineare: 0.205 s
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+  --  mesh:  Nb of Triangles = 103182, Nb of Vertices 52104
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.015625
+Valore di Pe: 0.234375
+Stima dell'errore in norma infinito: 0.223421
+Stima dell'errore in norma H1: 0.931939
+Max(ucalcolata - uesatta): 0.00152642
+Dimensione del sistema lineare: 52104
+Tempo per l'assemblaggio: 0.657 s
+Tempo per la soluzione del sistema lineare: 0.912 s
+ 
+Streamline diffusion
+Elementi P1
+  --  mesh:  Nb of Triangles =    100, Nb of Vertices 67
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.5
+Valore di Pe: 7.5
+Stima dell'errore in norma infinito: 1.59037
+Stima dell'errore in norma H1: 9.76598
+Max(ucalcolata - uesatta): 0.000359966
+Dimensione del sistema lineare: 67
+Tempo per l'assemblaggio: 0.002 s
+Tempo per la soluzione del sistema lineare: 0.001 s
+ 
+Streamline diffusion
+Elementi P1
+  --  mesh:  Nb of Triangles =    394, Nb of Vertices 230
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.25
+Valore di Pe: 3.75
+Stima dell'errore in norma infinito: 1.39145
+Stima dell'errore in norma H1: 8.60066
+Max(ucalcolata - uesatta): 0.00110748
+Dimensione del sistema lineare: 230
+Tempo per l'assemblaggio: 0.002 s
+Tempo per la soluzione del sistema lineare: 0.004 s
+ 
+Streamline diffusion
+Elementi P1
+  --  mesh:  Nb of Triangles =   1654, Nb of Vertices 892
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.125
+Valore di Pe: 1.875
+Stima dell'errore in norma infinito: 1.11127
+Stima dell'errore in norma H1: 6.77017
+Max(ucalcolata - uesatta): 0.000737093
+Dimensione del sistema lineare: 892
+Tempo per l'assemblaggio: 0.011 s
+Tempo per la soluzione del sistema lineare: 0.016 s
+ 
+Streamline diffusion
+Elementi P1
+  --  mesh:  Nb of Triangles =   6352, Nb of Vertices 3305
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.0625
+Valore di Pe: 0.9375
+Stima dell'errore in norma infinito: 0.786943
+Stima dell'errore in norma H1: 4.75206
+Max(ucalcolata - uesatta): 0.000440497
+Dimensione del sistema lineare: 3305
+Tempo per l'assemblaggio: 0.034 s
+Tempo per la soluzione del sistema lineare: 0.062 s
+ 
+Streamline diffusion
+Elementi P1
+  --  mesh:  Nb of Triangles =  25820, Nb of Vertices 13167
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.03125
+Valore di Pe: 0.46875
+Stima dell'errore in norma infinito: 0.491689
+Stima dell'errore in norma H1: 2.99064
+Max(ucalcolata - uesatta): 0.000243665
+Dimensione del sistema lineare: 13167
+Tempo per l'assemblaggio: 0.139 s
+Tempo per la soluzione del sistema lineare: 0.262 s
+ 
+Streamline diffusion
+Elementi P1
+  --  mesh:  Nb of Triangles = 103182, Nb of Vertices 52104
+  -- Solve :
+          min -1  max 1
+Valore di h: 0.015625
+Valore di Pe: 0.234375
+Stima dell'errore in norma infinito: 0.287953
+Stima dell'errore in norma H1: 1.73306
+Max(ucalcolata - uesatta): 0.000128449
+Dimensione del sistema lineare: 52104
+Tempo per l'assemblaggio: 0.683 s
+Tempo per la soluzione del sistema lineare: 1.192 s
+ 
+times: compile 0.316s, execution 72.767s,  mpirank:0
+ ######## We forget of deleting   -174 Nb pointer,   0Bytes  ,  mpirank 0, memory leak =0
+ CodeAlloc : nb ptr  4399,  size :474184 mpirank: 0
+Ok: Normal End
+ try getConsole C:\Users\Bruno\Desktop\Elaborato CAN\03 - ADR FE\adr_multi_P2_100.edp

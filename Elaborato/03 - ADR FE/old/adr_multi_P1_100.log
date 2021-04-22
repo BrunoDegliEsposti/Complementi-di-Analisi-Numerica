@@ -1,0 +1,800 @@
+-- FreeFem++ v  4.100000 (date mar.  9 avr. 2019 13:55:28)
+ Load: lg_fem lg_mesh lg_mesh3 eigenvalue
+    1 : real mu = 1;
+    2 : real bx = 100;
+    3 : real by = 0;
+    4 : real bnorm = sqrt(bx*bx+by*by);
+    5 : real bxn = bx/bnorm;
+    6 : real byn = by/bnorm;
+    7 : real sigma = 1;
+    8 : real t0, t1, t2, t3;
+    9 :
+   10 : /* Tutti i bordi sono già orientati correttamente in senso antiorario */
+   11 : border left(t = -3, 3)  {x = -1; y = -t;  label = 1;}
+   12 : border down(t = -1, 1)  {x = t;  y = t-2; label = 2;}
+   13 : border right(t = -1, 1) {x = 1;  y = t;   label = 3;}
+   14 : border up(t = -1, 1)    {x = -t; y = t+2; label = 4;}
+   15 :
+   16 : mesh Th0 = buildmesh(left(60) + down(28) + right(40) + up(28));
+   17 : fespace Vh0(Th0, P2);
+   18 : Vh0 u0, v0;
+   19 : problem adr(u0,v0)
+   20 :         = int2d(Th0)(mu*(dx(u0)*dx(v0)+dy(u0)*dy(v0)))
+   21 :         + int2d(Th0)((bx*dx(u0)+by*dy(u0))*v0)
+   22 :         + int2d(Th0)(sigma*u0*v0)
+   23 :         + on(1, u0=+1)
+   24 :         + on(3, u0=-1);Problem : ----------------------------- 488 dim = 2 0x29aae90
+ 
+   25 : adr;
+   26 : Th0 = adaptmesh(Th0, u0, err=0.001, nbvx=1000000);
+   27 : adr;
+   28 : Th0 = adaptmesh(Th0, u0, hmax=0.01, thetamax=25, err=0.0001, keepbackvertices=false, nbvx=1000000);
+   29 : adr;
+   30 :
+   31 : func real phi(real pe) {
+   32 :         return pe - 1 + 2*pe/(exp(2*pe)-1);
+   33 : }
+   34 :
+   35 : for (real h = 0.5; h > 0.01; h=0.7*h) {
+   36 :         cout << "Metodo di Galerkin standard" << endl;
+   37 :         cout << "Elementi P1" << endl;
+   38 :         t0 = clock();
+   39 :         mesh Th = buildmesh(left(15) + down(7) + right(5) + up(7));
+   40 :         Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+   41 :         Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+   42 :         fespace Vh(Th, P1);
+   43 :         Vh u, v;
+   44 :         real pe = bnorm*h/(2*mu);
+   45 :         problem adr(u,v)
+   46 :             = int2d(Th)(mu*(dx(u)*dx(v)+dy(u)*dy(v)))
+   47 :             + int2d(Th)((bx*dx(u)+by*dy(u))*v)
+   48 :             + int2d(Th)(sigma*u*v)
+   49 :                 + on(1, u=+1)
+   50 :                 + on(3, u=-1);Problem : ----------------------------- 1176 dim = 2 0x29af150
+ 
+   51 :         t1 = clock();
+   52 :
+   53 :         t2 = clock();
+   54 :         adr;
+   55 :         t3 = clock();
+   56 :
+   57 :         Vh0 uInVh0 = u;
+   58 :         Vh0 e = uInVh0-u0;
+   59 :         real errL2 = sqrt(int2d(Th0)(e^2));
+   60 :         real errLinf = e[].linfty;
+   61 :         cout << "Valore di h: " << h << endl;
+   62 :         cout << "Valore di Pe: " << pe << endl;
+   63 :         cout << "Dimensione di Vh: " << Vh.ndof << endl;
+   64 :         cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+   65 :         cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl;
+   66 :         cout << "Stima dell'errore in norma L2: " << errL2 << endl;
+   67 :         //cout << "Max(ucalcolata - uesatta): " << e[].max << endl;
+   68 :         cout << "Stima dell'errore in norma Linf: " << errLinf << endl << endl;
+   69 :         //plot(u, wait=1, fill=1, cmm="Valore di h: " + h);
+   70 : }
+   71 :
+   72 : for (real h = 0.5; h > 0.01; h=0.7*h) {
+   73 :         cout << "Viscosita' artificiale di tipo upwind" << endl;
+   74 :         cout << "Elementi P1" << endl;
+   75 :         t0 = clock();
+   76 :         mesh Th = buildmesh(left(15) + down(7) + right(5) + up(7));
+   77 :         Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+   78 :         Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+   79 :         fespace Vh(Th, P1);
+   80 :         Vh u, v;
+   81 :         real pe = bnorm*h/(2*mu);
+   82 :         real muupwind = mu*(1+pe);
+   83 :         problem adr(u,v)
+   84 :             = int2d(Th)(muupwind*(dx(u)*dx(v)+dy(u)*dy(v)))
+   85 :             + int2d(Th)((bx*dx(u)+by*dy(u))*v)
+   86 :             + int2d(Th)(sigma*u*v)
+   87 :                 + on(1, u=+1)
+   88 :                 + on(3, u=-1);Problem : ----------------------------- 2248 dim = 2 0x29afb40
+ 
+   89 :         t1 = clock();
+   90 :
+   91 :         t2 = clock();
+   92 :         adr;
+   93 :         t3 = clock();
+   94 :
+   95 :         Vh0 uInVh0 = u;
+   96 :         Vh0 e = uInVh0-u0;
+   97 :         real errL2 = sqrt(int2d(Th0)(e^2));
+   98 :         real errLinf = e[].linfty;
+   99 :         cout << "Valore di h: " << h << endl;
+  100 :         cout << "Valore di Pe: " << pe << endl;
+  101 :         cout << "Dimensione di Vh: " << Vh.ndof << endl;
+  102 :         cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+  103 :         cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl;
+  104 :         cout << "Stima dell'errore in norma L2: " << errL2 << endl;
+  105 :         cout << "Stima dell'errore in norma Linf: " << errLinf << endl << endl;
+  106 : }
+  107 :
+  108 : for (real h = 0.5; h > 0.01; h=0.7*h) {
+  109 :         cout << "Viscosita' artificiale di tipo Scharfetter-Gummel
+  ... : " << endl;
+  110 :         cout << "Elementi P1" << endl;
+  111 :         t0 = clock();
+  112 :         mesh Th = buildmesh(left(15) + down(7) + right(5) + up(7));
+  113 :         Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+  114 :         Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+  115 :         fespace Vh(Th, P1);
+  116 :         Vh u, v;
+  117 :         real pe = bnorm*h/(2*mu);
+  118 :         real muSG = mu*(1+phi(pe));
+  119 :         problem adr(u,v)
+  120 :             = int2d(Th)(muSG*(dx(u)*dx(v)+dy(u)*dy(v)))
+  121 :             + int2d(Th)((bx*dx(u)+by*dy(u))*v)
+  122 :             + int2d(Th)(sigma*u*v)
+  123 :                 + on(1, u=+1)
+  124 :                 + on(3, u=-1);Problem : ----------------------------- 3320 dim = 2 0x29be0a0
+ 
+  125 :         t1 = clock();
+  126 :
+  127 :         t2 = clock();
+  128 :         adr;
+  129 :         t3 = clock();
+  130 :
+  131 :         Vh0 uInVh0 = u;
+  132 :         Vh0 e = uInVh0-u0;
+  133 :         real errL2 = sqrt(int2d(Th0)(e^2));
+  134 :         real errLinf = e[].linfty;
+  135 :         cout << "Valore di h: " << h << endl;
+  136 :         cout << "Valore di phi(pe): " << phi(pe) << endl;
+  137 :         cout << "Dimensione di Vh: " << Vh.ndof << endl;
+  138 :         cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+  139 :         cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl;
+  140 :         cout << "Stima dell'errore in norma L2: " << errL2 << endl;
+  141 :         cout << "Stima dell'errore in norma Linf: " << errLinf << endl << endl;
+  142 : }
+  143 :
+  144 : for (real h = 0.5; h > 0.01; h=0.7*h) {
+  145 :         cout << "Streamline diffusion standard" << endl;
+  146 :         cout << "Elementi P1" << endl;
+  147 :         t0 = clock();
+  148 :         mesh Th = buildmesh(left(15) + down(7) + right(5) + up(7));
+  149 :         Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+  150 :         Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+  151 :         fespace Vh(Th, P1);
+  152 :         Vh u, v;
+  153 :         real pe = bnorm*h/(2*mu);
+  154 :         problem adr(u,v)
+  155 :             = int2d(Th)(mu*(dx(u)*dx(v)+dy(u)*dy(v)))
+  156 :             /* Il vettore b deve comparire normalizzato nei termini relativi alla streamline diffusion */
+  157 :             + int2d(Th)(mu*pe*(bxn*dx(u)+byn*dy(u))*(bxn*dx(v)+byn*dy(v)))
+  158 :             - int1d(Th, 2, 4)(mu*pe*v*(bxn*dx(u)+byn*dy(u))*(bxn*N.x+byn*N.y))
+  159 :             + int2d(Th)((bx*dx(u)+by*dy(u))*v)
+  160 :             + int2d(Th)(sigma*u*v)
+  161 :                 + on(1, u=+1)
+  162 :                 + on(3, u=-1);Problem : ----------------------------- 4384 dim = 2 0x29b3590
+ 
+  163 :         t1 = clock();
+  164 :
+  165 :         t2 = clock();
+  166 :         adr;
+  167 :         t3 = clock();
+  168 :
+  169 :         Vh0 uInVh0 = u;
+  170 :         Vh0 e = uInVh0-u0;
+  171 :         real errL2 = sqrt(int2d(Th0)(e^2));
+  172 :         real errLinf = e[].linfty;
+  173 :         cout << "Valore di h: " << h << endl;
+  174 :         cout << "Valore di Pe: " << pe << endl;
+  175 :         cout << "Dimensione di Vh: " << Vh.ndof << endl;
+  176 :         cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+  177 :         cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl;
+  178 :         cout << "Stima dell'errore in norma L2: " << errL2 << endl;
+  179 :         cout << "Stima dell'errore in norma Linf: " << errLinf << endl << endl;
+  180 : }
+  181 :
+  182 : for (real h = 0.5; h > 0.01; h=0.7*h) {
+  183 :         cout << "Streamline diffusion di tipo Scharfetter-Gummel" << endl;
+  184 :         cout << "Elementi P1" << endl;
+  185 :         t0 = clock();
+  186 :         mesh Th = buildmesh(left(15) + down(7) + right(5) + up(7));
+  187 :         Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+  188 :         Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+  189 :         fespace Vh(Th, P1);
+  190 :         Vh u, v;
+  191 :         real pe = bnorm*h/(2*mu);
+  192 :         problem adr(u,v)
+  193 :             = int2d(Th)(mu*(dx(u)*dx(v)+dy(u)*dy(v)))
+  194 :             /* Il vettore b deve comparire normalizzato nei termini relativi alla streamline diffusion */
+  195 :             + int2d(Th)(mu*phi(pe)*(bxn*dx(u)+byn*dy(u))*(bxn*dx(v)+byn*dy(v)))
+  196 :             - int1d(Th, 2, 4)(mu*phi(pe)*v*(bxn*dx(u)+byn*dy(u))*(bxn*N.x+byn*N.y))
+  197 :             + int2d(Th)((bx*dx(u)+by*dy(u))*v)
+  198 :             + int2d(Th)(sigma*u*v)
+  199 :                 + on(1, u=+1)
+  200 :                 + on(3, u=-1);Problem : ----------------------------- 7688 dim = 2 0x29b8b70
+ 
+  201 :         t1 = clock();
+  202 :
+  203 :         t2 = clock();
+  204 :         adr;
+  205 :         t3 = clock();
+  206 :
+  207 :         Vh0 uInVh0 = u;
+  208 :         Vh0 e = uInVh0-u0;
+  209 :         real errL2 = sqrt(int2d(Th0)(e^2));
+  210 :         real errLinf = e[].linfty;
+  211 :         cout << "Valore di h: " << h << endl;
+  212 :         cout << "Valore di phi(pe): " << phi(pe) << endl;
+  213 :         cout << "Dimensione di Vh: " << Vh.ndof << endl;
+  214 :         cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+  215 :         cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl;
+  216 :         cout << "Stima dell'errore in norma L2: " << errL2 << endl;
+  217 :         cout << "Stima dell'errore in norma Linf: " << errLinf << endl << endl;
+  218 : }
+  219 :  sizestack + 1024 =11952  ( 10928 )
+ 
+  --  mesh:  Nb of Triangles =   2482, Nb of Vertices 1320
+  -- Solve :
+          min -1  max 1.16265
+  number of required edges : 0
+  -- adaptmesh Regulary:  Nb triangles 9254 , h  min 0.00316363 , h max 1.03378
+     area =  8 , M area = 4088.76 , M area/( |Khat| nt) 1.02038
+     infiny-regulaty:  min 0.356777  max 2.08896
+     anisomax  15.232, beta max = 1.6002 min  0.776265
+  --  mesh:  Nb of Triangles =   9254, Nb of Vertices 4792
+  -- Solve :
+          min -1  max 1
+  number of required edges : 0
+  -- adaptmesh Regulary:  Nb triangles 173401 , h  min 0.000319792 , h max 0.163809
+     area =  8 , M area = 75536.9 , M area/( |Khat| nt) 1.00602
+     infiny-regulaty:  min 0.400599  max 2.67695
+     anisomax  34.6811, beta max = 1.3615 min  0.70036
+  --  mesh:  Nb of Triangles = 173401, Nb of Vertices 87708
+  -- Solve :
+          min -1  max 1
+Metodo di Galerkin standard
+Elementi P1
+  --  mesh:  Nb of Triangles =    118, Nb of Vertices 77
+Valore di h: 0.5
+Valore di Pe: 25
+Dimensione di Vh: 52
+Tempo per l'assemblaggio: 0.078 s
+Tempo per la soluzione del sistema lineare: 0.001 s
+Stima dell'errore in norma L2: 2.67983
+Stima dell'errore in norma Linf: 4.10718
+ 
+Metodo di Galerkin standard
+Elementi P1
+Valore di h: 0.35
+Valore di Pe: 17.5
+Dimensione di Vh: 94
+Tempo per l'assemblaggio: 0.077 s
+Tempo per la soluzione del sistema lineare: 0.001 s
+Stima dell'errore in norma L2: 3.01672
+Stima dell'errore in norma Linf: 4.14734
+ 
+Metodo di Galerkin standard
+Elementi P1
+Valore di h: 0.245
+Valore di Pe: 12.25
+Dimensione di Vh: 178
+Tempo per l'assemblaggio: 0.079 s
+Tempo per la soluzione del sistema lineare: 0.002 s
+Stima dell'errore in norma L2: 1.12802
+Stima dell'errore in norma Linf: 2.75168
+ 
+Metodo di Galerkin standard
+Elementi P1
+Valore di h: 0.1715
+Valore di Pe: 8.575
+Dimensione di Vh: 337
+Tempo per l'assemblaggio: 0.086 s
+Tempo per la soluzione del sistema lineare: 0.004 s
+Stima dell'errore in norma L2: 0.802289
+Stima dell'errore in norma Linf: 2.35141
+ 
+Metodo di Galerkin standard
+Elementi P1
+Valore di h: 0.12005
+Valore di Pe: 6.0025
+Dimensione di Vh: 671
+Tempo per l'assemblaggio: 0.093 s
+Tempo per la soluzione del sistema lineare: 0.009 s
+Stima dell'errore in norma L2: 0.568539
+Stima dell'errore in norma Linf: 1.95576
+ 
+Metodo di Galerkin standard
+Elementi P1
+Valore di h: 0.084035
+Valore di Pe: 4.20175
+Dimensione di Vh: 1314
+Tempo per l'assemblaggio: 0.126 s
+Tempo per la soluzione del sistema lineare: 0.02 s
+Stima dell'errore in norma L2: 0.384585
+Stima dell'errore in norma Linf: 1.75625
+ 
+Metodo di Galerkin standard
+Elementi P1
+Valore di h: 0.0588245
+Valore di Pe: 2.94122
+Dimensione di Vh: 2652
+Tempo per l'assemblaggio: 0.135 s
+Tempo per la soluzione del sistema lineare: 0.039 s
+Stima dell'errore in norma L2: 0.2474
+Stima dell'errore in norma Linf: 1.5377
+ 
+Metodo di Galerkin standard
+Elementi P1
+Valore di h: 0.0411771
+Valore di Pe: 2.05886
+Dimensione di Vh: 5277
+Tempo per l'assemblaggio: 0.194 s
+Tempo per la soluzione del sistema lineare: 0.079 s
+Stima dell'errore in norma L2: 0.149952
+Stima dell'errore in norma Linf: 1.00252
+ 
+Metodo di Galerkin standard
+Elementi P1
+Valore di h: 0.028824
+Valore di Pe: 1.4412
+Dimensione di Vh: 10845
+Tempo per l'assemblaggio: 0.267 s
+Tempo per la soluzione del sistema lineare: 0.165 s
+Stima dell'errore in norma L2: 0.0845662
+Stima dell'errore in norma Linf: 0.832849
+ 
+Metodo di Galerkin standard
+Elementi P1
+Valore di h: 0.0201768
+Valore di Pe: 1.00884
+Dimensione di Vh: 22590
+Tempo per l'assemblaggio: 0.426 s
+Tempo per la soluzione del sistema lineare: 0.387 s
+Stima dell'errore in norma L2: 0.0450484
+Stima dell'errore in norma Linf: 0.67801
+ 
+Metodo di Galerkin standard
+Elementi P1
+Valore di h: 0.0141238
+Valore di Pe: 0.706188
+Dimensione di Vh: 43339
+Tempo per l'assemblaggio: 0.815 s
+Tempo per la soluzione del sistema lineare: 0.772 s
+Stima dell'errore in norma L2: 0.0240356
+Stima dell'errore in norma Linf: 0.544436
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+Valore di h: 0.5
+Valore di Pe: 25
+Dimensione di Vh: 52
+Tempo per l'assemblaggio: 0.08 s
+Tempo per la soluzione del sistema lineare: 0 s
+Stima dell'errore in norma L2: 1.14833
+Stima dell'errore in norma Linf: 1.83864
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+Valore di h: 0.35
+Valore di Pe: 17.5
+Dimensione di Vh: 94
+Tempo per l'assemblaggio: 0.076 s
+Tempo per la soluzione del sistema lineare: 0.001 s
+Stima dell'errore in norma L2: 0.917939
+Stima dell'errore in norma Linf: 1.76463
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+Valore di h: 0.245
+Valore di Pe: 12.25
+Dimensione di Vh: 178
+Tempo per l'assemblaggio: 0.078 s
+Tempo per la soluzione del sistema lineare: 0.002 s
+Stima dell'errore in norma L2: 0.743528
+Stima dell'errore in norma Linf: 1.70311
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+Valore di h: 0.1715
+Valore di Pe: 8.575
+Dimensione di Vh: 337
+Tempo per l'assemblaggio: 0.088 s
+Tempo per la soluzione del sistema lineare: 0.004 s
+Stima dell'errore in norma L2: 0.601886
+Stima dell'errore in norma Linf: 1.62612
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+Valore di h: 0.12005
+Valore di Pe: 6.0025
+Dimensione di Vh: 671
+Tempo per l'assemblaggio: 0.094 s
+Tempo per la soluzione del sistema lineare: 0.009 s
+Stima dell'errore in norma L2: 0.480987
+Stima dell'errore in norma Linf: 1.52282
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+Valore di h: 0.084035
+Valore di Pe: 4.20175
+Dimensione di Vh: 1314
+Tempo per l'assemblaggio: 0.103 s
+Tempo per la soluzione del sistema lineare: 0.017 s
+Stima dell'errore in norma L2: 0.381559
+Stima dell'errore in norma Linf: 1.40998
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+Valore di h: 0.0588245
+Valore di Pe: 2.94122
+Dimensione di Vh: 2665
+Tempo per l'assemblaggio: 0.135 s
+Tempo per la soluzione del sistema lineare: 0.04 s
+Stima dell'errore in norma L2: 0.294002
+Stima dell'errore in norma Linf: 1.28741
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+Valore di h: 0.0411771
+Valore di Pe: 2.05886
+Dimensione di Vh: 5277
+Tempo per l'assemblaggio: 0.21 s
+Tempo per la soluzione del sistema lineare: 0.089 s
+Stima dell'errore in norma L2: 0.222962
+Stima dell'errore in norma Linf: 1.13345
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+Valore di h: 0.028824
+Valore di Pe: 1.4412
+Dimensione di Vh: 10840
+Tempo per l'assemblaggio: 0.281 s
+Tempo per la soluzione del sistema lineare: 0.175 s
+Stima dell'errore in norma L2: 0.16559
+Stima dell'errore in norma Linf: 0.976357
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+Valore di h: 0.0201768
+Valore di Pe: 1.00884
+Dimensione di Vh: 22522
+Tempo per l'assemblaggio: 0.461 s
+Tempo per la soluzione del sistema lineare: 0.386 s
+Stima dell'errore in norma L2: 0.120815
+Stima dell'errore in norma Linf: 0.814659
+ 
+Viscosita' artificiale di tipo upwind
+Elementi P1
+Valore di h: 0.0141238
+Valore di Pe: 0.706188
+Dimensione di Vh: 43437
+Tempo per l'assemblaggio: 0.912 s
+Tempo per la soluzione del sistema lineare: 0.844 s
+Stima dell'errore in norma L2: 0.087745
+Stima dell'errore in norma Linf: 0.659989
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.5
+Valore di phi(pe): 24
+Dimensione di Vh: 52
+Tempo per l'assemblaggio: 0.076 s
+Tempo per la soluzione del sistema lineare: 0.001 s
+Stima dell'errore in norma L2: 1.13619
+Stima dell'errore in norma Linf: 1.83761
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.35
+Valore di phi(pe): 16.5
+Dimensione di Vh: 94
+Tempo per l'assemblaggio: 0.076 s
+Tempo per la soluzione del sistema lineare: 0.001 s
+Stima dell'errore in norma L2: 0.902675
+Stima dell'errore in norma Linf: 1.76205
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.245
+Valore di phi(pe): 11.25
+Dimensione di Vh: 178
+Tempo per l'assemblaggio: 0.078 s
+Tempo per la soluzione del sistema lineare: 0.002 s
+Stima dell'errore in norma L2: 0.72385
+Stima dell'errore in norma Linf: 1.69789
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.1715
+Valore di phi(pe): 7.575
+Dimensione di Vh: 337
+Tempo per l'assemblaggio: 0.08 s
+Tempo per la soluzione del sistema lineare: 0.004 s
+Stima dell'errore in norma L2: 0.577626
+Stima dell'errore in norma Linf: 1.61798
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.12005
+Valore di phi(pe): 5.00257
+Dimensione di Vh: 671
+Tempo per l'assemblaggio: 0.089 s
+Tempo per la soluzione del sistema lineare: 0.009 s
+Stima dell'errore in norma L2: 0.45038
+Stima dell'errore in norma Linf: 1.50868
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.084035
+Valore di phi(pe): 3.20363
+Dimensione di Vh: 1314
+Tempo per l'assemblaggio: 0.104 s
+Tempo per la soluzione del sistema lineare: 0.018 s
+Stima dell'errore in norma L2: 0.343373
+Stima dell'errore in norma Linf: 1.3853
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.0588245
+Valore di phi(pe): 1.95767
+Dimensione di Vh: 2658
+Tempo per l'assemblaggio: 0.135 s
+Tempo per la soluzione del sistema lineare: 0.041 s
+Stima dell'errore in norma L2: 0.247381
+Stima dell'errore in norma Linf: 1.24077
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.0411771
+Valore di phi(pe): 1.12701
+Dimensione di Vh: 5277
+Tempo per l'assemblaggio: 0.202 s
+Tempo per la soluzione del sistema lineare: 0.082 s
+Stima dell'errore in norma L2: 0.164774
+Stima dell'errore in norma Linf: 1.07359
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.028824
+Valore di phi(pe): 0.612191
+Dimensione di Vh: 10840
+Tempo per l'assemblaggio: 0.267 s
+Tempo per la soluzione del sistema lineare: 0.179 s
+Stima dell'errore in norma L2: 0.102108
+Stima dell'errore in norma Linf: 0.898212
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.0201768
+Valore di phi(pe): 0.31826
+Dimensione di Vh: 22593
+Tempo per l'assemblaggio: 0.428 s
+Tempo per la soluzione del sistema lineare: 0.383 s
+Stima dell'errore in norma L2: 0.0574101
+Stima dell'errore in norma Linf: 0.726121
+ 
+Viscosita' artificiale di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.0141238
+Valore di phi(pe): 0.160957
+Dimensione di Vh: 43516
+Tempo per l'assemblaggio: 0.793 s
+Tempo per la soluzione del sistema lineare: 0.782 s
+Stima dell'errore in norma L2: 0.0313117
+Stima dell'errore in norma Linf: 0.570724
+ 
+Streamline diffusion standard
+Elementi P1
+Valore di h: 0.5
+Valore di Pe: 25
+Dimensione di Vh: 52
+Tempo per l'assemblaggio: 0.077 s
+Tempo per la soluzione del sistema lineare: 0.001 s
+Stima dell'errore in norma L2: 1.15533
+Stima dell'errore in norma Linf: 1.84926
+ 
+Streamline diffusion standard
+Elementi P1
+Valore di h: 0.35
+Valore di Pe: 17.5
+Dimensione di Vh: 94
+Tempo per l'assemblaggio: 0.076 s
+Tempo per la soluzione del sistema lineare: 0.001 s
+Stima dell'errore in norma L2: 0.940815
+Stima dell'errore in norma Linf: 1.80516
+ 
+Streamline diffusion standard
+Elementi P1
+Valore di h: 0.245
+Valore di Pe: 12.25
+Dimensione di Vh: 178
+Tempo per l'assemblaggio: 0.079 s
+Tempo per la soluzione del sistema lineare: 0.002 s
+Stima dell'errore in norma L2: 0.752038
+Stima dell'errore in norma Linf: 1.7533
+ 
+Streamline diffusion standard
+Elementi P1
+Valore di h: 0.1715
+Valore di Pe: 8.575
+Dimensione di Vh: 336
+Tempo per l'assemblaggio: 0.081 s
+Tempo per la soluzione del sistema lineare: 0.005 s
+Stima dell'errore in norma L2: 0.609364
+Stima dell'errore in norma Linf: 1.69053
+ 
+Streamline diffusion standard
+Elementi P1
+Valore di h: 0.12005
+Valore di Pe: 6.0025
+Dimensione di Vh: 671
+Tempo per l'assemblaggio: 0.089 s
+Tempo per la soluzione del sistema lineare: 0.012 s
+Stima dell'errore in norma L2: 0.485672
+Stima dell'errore in norma Linf: 1.59298
+ 
+Streamline diffusion standard
+Elementi P1
+Valore di h: 0.084035
+Valore di Pe: 4.20175
+Dimensione di Vh: 1314
+Tempo per l'assemblaggio: 0.105 s
+Tempo per la soluzione del sistema lineare: 0.025 s
+Stima dell'errore in norma L2: 0.383615
+Stima dell'errore in norma Linf: 1.48728
+ 
+Streamline diffusion standard
+Elementi P1
+Valore di h: 0.0588245
+Valore di Pe: 2.94122
+Dimensione di Vh: 2662
+Tempo per l'assemblaggio: 0.145 s
+Tempo per la soluzione del sistema lineare: 0.054 s
+Stima dell'errore in norma L2: 0.294625
+Stima dell'errore in norma Linf: 1.35852
+ 
+Streamline diffusion standard
+Elementi P1
+Valore di h: 0.0411771
+Valore di Pe: 2.05886
+Dimensione di Vh: 5277
+Tempo per l'assemblaggio: 0.194 s
+Tempo per la soluzione del sistema lineare: 0.105 s
+Stima dell'errore in norma L2: 0.224081
+Stima dell'errore in norma Linf: 1.20763
+ 
+Streamline diffusion standard
+Elementi P1
+Valore di h: 0.028824
+Valore di Pe: 1.4412
+Dimensione di Vh: 10843
+Tempo per l'assemblaggio: 0.268 s
+Tempo per la soluzione del sistema lineare: 0.224 s
+Stima dell'errore in norma L2: 0.166255
+Stima dell'errore in norma Linf: 1.05018
+ 
+Streamline diffusion standard
+Elementi P1
+Valore di h: 0.0201768
+Valore di Pe: 1.00884
+Dimensione di Vh: 22503
+Tempo per l'assemblaggio: 0.441 s
+Tempo per la soluzione del sistema lineare: 0.493 s
+Stima dell'errore in norma L2: 0.12132
+Stima dell'errore in norma Linf: 0.885018
+ 
+Streamline diffusion standard
+Elementi P1
+Valore di h: 0.0141238
+Valore di Pe: 0.706188
+Dimensione di Vh: 43431
+Tempo per l'assemblaggio: 0.816 s
+Tempo per la soluzione del sistema lineare: 0.978 s
+Stima dell'errore in norma L2: 0.0883476
+Stima dell'errore in norma Linf: 0.713984
+ 
+Streamline diffusion di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.5
+Valore di phi(pe): 24
+Dimensione di Vh: 52
+Tempo per l'assemblaggio: 0.076 s
+Tempo per la soluzione del sistema lineare: 0.006 s
+Stima dell'errore in norma L2: 1.14113
+Stima dell'errore in norma Linf: 1.84816
+ 
+Streamline diffusion di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.35
+Valore di phi(pe): 16.5
+Dimensione di Vh: 94
+Tempo per l'assemblaggio: 0.076 s
+Tempo per la soluzione del sistema lineare: 0.009 s
+Stima dell'errore in norma L2: 0.922245
+Stima dell'errore in norma Linf: 1.80196
+ 
+Streamline diffusion di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.245
+Valore di phi(pe): 11.25
+Dimensione di Vh: 178
+Tempo per l'assemblaggio: 0.078 s
+Tempo per la soluzione del sistema lineare: 0.021 s
+Stima dell'errore in norma L2: 0.729369
+Stima dell'errore in norma Linf: 1.74732
+ 
+Streamline diffusion di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.1715
+Valore di phi(pe): 7.575
+Dimensione di Vh: 336
+Tempo per l'assemblaggio: 0.082 s
+Tempo per la soluzione del sistema lineare: 0.039 s
+Stima dell'errore in norma L2: 0.582567
+Stima dell'errore in norma Linf: 1.67941
+ 
+Streamline diffusion di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.12005
+Valore di phi(pe): 5.00257
+Dimensione di Vh: 671
+Tempo per l'assemblaggio: 0.089 s
+Tempo per la soluzione del sistema lineare: 0.083 s
+Stima dell'errore in norma L2: 0.452948
+Stima dell'errore in norma Linf: 1.57342
+ 
+Streamline diffusion di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.084035
+Valore di phi(pe): 3.20363
+Dimensione di Vh: 1314
+Tempo per l'assemblaggio: 0.103 s
+Tempo per la soluzione del sistema lineare: 0.164 s
+Stima dell'errore in norma L2: 0.343657
+Stima dell'errore in norma Linf: 1.45241
+ 
+Streamline diffusion di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.0588245
+Valore di phi(pe): 1.95767
+Dimensione di Vh: 2656
+Tempo per l'assemblaggio: 0.136 s
+Tempo per la soluzione del sistema lineare: 0.339 s
+Stima dell'errore in norma L2: 0.246076
+Stima dell'errore in norma Linf: 1.30001
+ 
+Streamline diffusion di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.0411771
+Valore di phi(pe): 1.12701
+Dimensione di Vh: 5276
+Tempo per l'assemblaggio: 0.207 s
+Tempo per la soluzione del sistema lineare: 0.714 s
+Stima dell'errore in norma L2: 0.164834
+Stima dell'errore in norma Linf: 1.12074
+ 
+Streamline diffusion di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.028824
+Valore di phi(pe): 0.612191
+Dimensione di Vh: 10843
+Tempo per l'assemblaggio: 0.278 s
+Tempo per la soluzione del sistema lineare: 1.447 s
+Stima dell'errore in norma L2: 0.101833
+Stima dell'errore in norma Linf: 0.933743
+ 
+Streamline diffusion di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.0201768
+Valore di phi(pe): 0.31826
+Dimensione di Vh: 22527
+Tempo per l'assemblaggio: 0.444 s
+Tempo per la soluzione del sistema lineare: 3.09 s
+Stima dell'errore in norma L2: 0.0576238
+Stima dell'errore in norma Linf: 0.750672
+ 
+Streamline diffusion di tipo Scharfetter-Gummel
+Elementi P1
+Valore di h: 0.0141238
+Valore di phi(pe): 0.160957
+Dimensione di Vh: 43420
+Tempo per l'assemblaggio: 0.815 s
+Tempo per la soluzione del sistema lineare: 5.804 s
+Stima dell'errore in norma L2: 0.0313939
+Stima dell'errore in norma Linf: 0.590265
+ 
+ try getConsole C:\Users\Bruno\Desktop\Elaborato CAN\ADR FE\adr_multi_P1_100.edp

@@ -1,0 +1,89 @@
+load "Element_P4"
+
+real h = 0.2;
+real deltat = 0.2;
+real tfinal = 1;
+real theta = 0.5;
+real ptheta = 2 + 2*(theta==0.5);
+verbosity = 0;
+bool grafici = false;
+
+border circle(t = 0, 2*pi) {
+	x = cos(t);
+	y = sin(t);
+	label = 1;
+}
+
+func real f(real t) {
+	return (4*t+x^2+y^2+2)/(t+1)^2;
+}
+
+func real uexact(real t) {
+	return (-x^2-y^2+2)/(t+1);
+}
+
+// Mesh di riferimento per la stima dell'errore H1
+mesh Tref = buildmesh(circle(1000));
+fespace Vref(Tref, P4);
+
+for (int j = 0; j < 8; j++) {
+
+// Numero di suddivisioni della circonferenza
+int Nsub = round(2*pi/h);
+mesh Th = buildmesh(circle(Nsub));
+fespace Vh(Th, P2); int r = 2;
+Vh uh, fh;
+varf getM(u,v) = int2d(Th)(u*v);
+varf getA(u,v) = int2d(Th)(dx(u)*dx(v)+dy(u)*dy(v)) + int1d(Th,1)(2*u*v);
+varf getf(u,v) = int2d(Th)(fh*v);
+matrix M = getM(Vh,Vh);
+matrix A = getA(Vh,Vh);
+matrix S = M + deltat*theta*A;
+// Senza 1* davanti a M, la matrice T non viene calcolata correttamente.
+// Si tratta di un bug di FreeFem che ho provveduto a segnalare.
+// https://github.com/FreeFem/FreeFem-sources/issues/102
+matrix T = 1*M - deltat*(1-theta)*A;
+// La fattorizzazione di Cholesky non genera nuove variabili
+set(S, solver=Cholesky, factorize=1);
+// In alternativa, c'è CG con set(S, solver=CG, eps=1e-10);
+
+// vs serve per evitare che FreeFEM cambi il colore delle curve di
+// livello a ogni iterazione. Altrimenti non si vede niente
+real[int] vs = 0:40;
+vs *= 0.05;
+// uh all'istante iniziale t=0
+uh = -x^2-y^2+2;
+real t = 0;
+while (t < tfinal - 1e-8) {
+	if (grafici) {
+		plot(uh, wait=1, fill=1, viso=vs, cmm="t = " + t);
+	}
+	// La sintassi uh[] permette di accedere al vettore associato
+	// a un elemento di Vh rispetto alla base lagrangiana scelta
+	real[int] yh = T*uh[];
+	fh = theta*f(t+deltat) + (1-theta)*f(t);
+	real[int] fterm = getf(0,Vh);
+	yh += deltat*fterm;
+	uh[] = S^-1*yh;
+	t += deltat;
+}
+
+Vref e = uh-uexact(t);
+real eH1 = sqrt(int2d(Tref,qforder=10)(e^2+dx(e)^2+dy(e)^2));
+
+cout.scientific;
+cout.precision(2);
+cout << "Valore di h: " << h << endl;
+cout << "Valore di deltat: " << deltat << endl;
+cout << "Valore di sqrt(deltat^p(theta) + h^(2r)): "
+     << sqrt(deltat^ptheta+h^(2*r)) << endl;
+cout << "Errore in norma H1: " << eH1 << endl << endl;
+
+if (grafici) {
+	plot(uh, wait=1, fill=1, viso=vs, cmm="t = " + t);
+	plot(e,  wait=1, fill=1, cmm="Errore finale");
+}
+
+h *= 1/sqrt(2);
+deltat *= 1/sqrt(2);
+}

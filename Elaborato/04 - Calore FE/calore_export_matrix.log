@@ -1,0 +1,74 @@
+-- FreeFem++ v  4.200001 (date Sat, Jun 08, 2019  6:08:22 PM git v4.2.1)
+ Load: lg_fem lg_mesh lg_mesh3 eigenvalue
+    1 : load "Element_P4"(load: loadLibary C:\Program Files (x86)\FreeFem++\\.\Element_P4 = 0)
+    2 :
+    3 : real h = 0.1;
+    4 : real deltat = 0.1;
+    5 : real tfinal = 1;
+    6 : real theta = 0.5;
+    7 :
+    8 : border circle(t = 0, 2*pi) {
+    9 :         x = cos(t);
+   10 :         y = sin(t);
+   11 :         label = 1;
+   12 : }
+   13 :
+   14 : func real f(real t) {
+   15 :         return (4*t+x^2+y^2+2)/(t+1)^2;
+   16 : }
+   17 :
+   18 : func real uexact(real t) {
+   19 :         return (-x^2-y^2+2)/(t+1);
+   20 : }
+   21 :
+   22 : // Numero di suddivisioni della circonferenza
+   23 : int Nsub = round(2*pi/h);
+   24 : mesh Th = buildmesh(circle(Nsub));
+   25 : fespace Vh(Th, P2);
+   26 : Vh uh, fh;
+   27 : varf getM(u,v) = int2d(Th)(u*v);
+   28 : varf getA(u,v) = int2d(Th)(dx(u)*dx(v)+dy(u)*dy(v)) + int1d(Th,1)(2*u*v);
+   29 : varf getf(u,v) = int2d(Th)(fh*v);
+   30 : matrix M = getM(Vh,Vh);
+   31 : matrix A = getA(Vh,Vh);
+   32 : matrix S = M + deltat*theta*A;
+   33 : // Senza 1* davanti a M, la matrice T non viene calcolata correttamente.
+   34 : // Si tratta di un bug di FreeFem che ho provveduto a segnalare.
+   35 : // https://github.com/FreeFem/FreeFem-sources/issues/102
+   36 : matrix T = 1*M - deltat*(1-theta)*A;
+   37 : // In FreeFEM, la fattorizzazione di Cholesky non genera nuove variabili
+   38 : set(S, solver=Cholesky, factorize=1);
+   39 : // Alternativa: gradienti coniugati con set(S, solver=CG, eps=1e-10);
+   40 :
+   41 : // La matrice T viene salvata in formato COO su un file di testo .m
+   42 : // direttamente leggibile da Matlab
+   43 : int[int] I, J;
+   44 : real[int] C;
+   45 : [I, J, C] = T;
+   46 : ofstream output("T_matrix_COO.m");
+   47 : output.precision(16);
+   48 : output.scientific;
+   49 : output << "I = [";
+   50 : for (int i = 0; i < I.n; i++) {
+   51 :         output << I[i]+1 << " ";
+   52 : }
+   53 : output << "];" << endl;
+   54 : output << "J = [";
+   55 : for (int i = 0; i < J.n; i++) {
+   56 :         output << J[i]+1 << " ";
+   57 : }
+   58 : output << "];" << endl;
+   59 : output << "V = [";
+   60 : for (int i = 0; i < C.n; i++) {
+   61 :         output << C[i] << " ";
+   62 : }
+   63 : output << "];" << endl;
+   64 : output << "T = sparse(I,J,V," << T.n << "," << T.m << ");" << endl;
+   65 :  sizestack + 1024 =2156  ( 1132 )
+ 
+  --  mesh:  Nb of Triangles =    703, Nb of Vertices 384
+times: compile 0.12s, execution 0.105s,  mpirank:0
+ ######## We forget of deleting   -6 Nb pointer,   0Bytes  ,  mpirank 0, memory leak =0
+ CodeAlloc : nb ptr  3323,  size :423416 mpirank: 0
+Ok: Normal End
+ try getConsole C:\Users\Bruno\Desktop\Elaborato CAN\04 - Calore FE\calore_export_matrix.edp

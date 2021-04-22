@@ -1,0 +1,185 @@
+real mu = 1;
+real bx = 30;
+real by = 0;
+real bnorm = sqrt(bx*bx+by*by);
+real bxn = bx/bnorm;
+real byn = by/bnorm;
+real sigma = 1;
+real t0, t1, t2, t3;
+
+/* Tutti i bordi sono già orientati correttamente in senso antiorario */
+border left(t = -3, 3)  {x = -1; y = -t;  label = 1;}
+border down(t = -1, 1)  {x = t;  y = t-2; label = 2;}
+border right(t = -1, 1) {x = 1;  y = t;   label = 3;}
+border up(t = -1, 1)    {x = -t; y = t+2; label = 4;}
+
+// Costruzione di una soluzione di riferimento
+mesh Tref = buildmesh(left(60) + down(28) + right(40) + up(28));
+fespace Vref(Tref, P2);
+Vref u, v;
+problem adr(u,v)
+	= int2d(Tref)(mu*(dx(u)*dx(v)+dy(u)*dy(v)))
+	+ int2d(Tref)((bx*dx(u)+by*dy(u))*v)
+	+ int2d(Tref)(sigma*u*v)
+	+ on(1, u=+1)
+	+ on(3, u=-1);
+adr;
+Tref = adaptmesh(Tref, u, hmax=0.1, err=0.001, nbvx=10000000);
+adr;	// Ricalcolo della soluzione dopo il primo adattamento
+Tref = adaptmesh(Tref, u, hmax=0.01, err=0.0001, nbvx=10000000);
+adr;	// Ricalcolo della soluzione dopo il secondo adattamento
+
+// Funzione di supporto per il metodo di Scharfetter-Gummel
+func real phi(real pe) {
+	return pe - 1 + 2*pe/(exp(2*pe)-1);
+}
+
+for (real h = 0.5; h > 0.01; h *= 0.5) {
+	cout << "Metodo di Galerkin standard" << endl;
+	cout << "Elementi P1" << endl;
+	t0 = clock();
+	int n = round(1/h);
+	mesh Th = buildmesh(left(6*n) + down(3*n) + right(4*n) + up(3*n));
+	fespace Vh(Th, P1);
+	Vh uh, vh;
+	real pe = bnorm*h/(2*mu);
+	problem adr(uh,vh)
+	    = int2d(Th)(mu*(dx(uh)*dx(vh)+dy(uh)*dy(vh)))
+	    + int2d(Th)((bx*dx(uh)+by*dy(uh))*vh)
+	    + int2d(Th)(sigma*uh*vh)
+		+ on(1, uh=+1)
+		+ on(3, uh=-1);
+	t1 = clock();
+
+	t2 = clock();
+	adr;
+	t3 = clock();
+
+	Vref e = uh - u;
+	real einf = e[].linfty;
+	real eH1 = sqrt(int2d(Tref)(e^2+dx(e)^2+dy(e)^2));
+
+	cout << "Valore di h: " << h << endl;
+	cout << "Valore di hmax sulla mesh: " << Th.hmax << endl;
+	cout << "Valore di Pe: " << pe << endl;
+	cout << "Stima dell'errore in norma infinito: " << einf << endl;
+	cout << "Stima dell'errore in norma H1: " << eH1 << endl;
+	cout << "Max(ucalcolata - uesatta): " << e[].max << endl;
+	cout << "Dimensione del sistema lineare: " << Vh.ndof << endl;
+	cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+	cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl << endl;
+	//plot(u, wait=1, fill=1, cmm="Valore di h: " + h);
+}
+
+for (real h = 0.5; h > 0.01; h *= 0.5) {
+	cout << "Viscosita' artificiale di tipo upwind" << endl;
+	cout << "Elementi P1" << endl;
+	t0 = clock();
+	int n = round(1/h);
+	mesh Th = buildmesh(left(6*n) + down(3*n) + right(4*n) + up(3*n));
+	fespace Vh(Th, P1);
+	Vh uh, vh;
+	real pe = bnorm*h/(2*mu);
+	real muupwind = mu*(1+pe);
+	problem adr(uh,vh)
+	    = int2d(Th)(muupwind*(dx(uh)*dx(vh)+dy(uh)*dy(vh)))
+	    + int2d(Th)((bx*dx(uh)+by*dy(uh))*vh)
+	    + int2d(Th)(sigma*uh*vh)
+		+ on(1, uh=+1)
+		+ on(3, uh=-1);
+	t1 = clock();
+
+	t2 = clock();
+	adr;
+	t3 = clock();
+
+	Vref e = uh - u;
+	real einf = e[].linfty;
+	real eH1 = sqrt(int2d(Tref)(e^2+dx(e)^2+dy(e)^2));
+
+	cout << "Valore di h: " << h << endl;
+	cout << "Valore di Pe: " << pe << endl;
+	cout << "Stima dell'errore in norma infinito: " << einf << endl;
+	cout << "Stima dell'errore in norma H1: " << eH1 << endl;
+	cout << "Max(ucalcolata - uesatta): " << e[].max << endl;
+	cout << "Dimensione del sistema lineare: " << Vh.ndof << endl;
+	cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+	cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl << endl;
+	//plot(e, wait=1, fill=1, cmm="Valore di h: " + h);
+}
+
+for (real h = 0.5; h > 0.01; h *= 0.5) {
+	cout << "Viscosita' artificiale di tipo Scharfetter-Gummel" << endl;
+	cout << "Elementi P1" << endl;
+	t0 = clock();
+	int n = round(1/h);
+	mesh Th = buildmesh(left(6*n) + down(3*n) + right(4*n) + up(3*n));
+	fespace Vh(Th, P1);
+	Vh uh, vh;
+	real pe = bnorm*h/(2*mu);
+	real muSG = mu*(1+phi(pe));
+	problem adr(uh,vh)
+	    = int2d(Th)(muSG*(dx(uh)*dx(vh)+dy(uh)*dy(vh)))
+	    + int2d(Th)((bx*dx(uh)+by*dy(uh))*vh)
+	    + int2d(Th)(sigma*uh*vh)
+		+ on(1, uh=+1)
+		+ on(3, uh=-1);
+	t1 = clock();
+
+	t2 = clock();
+	adr;
+	t3 = clock();
+
+	Vref e = uh - u;
+	real einf = e[].linfty;
+	real eH1 = sqrt(int2d(Tref)(e^2+dx(e)^2+dy(e)^2));
+
+	cout << "Valore di h: " << h << endl;
+	cout << "Valore di Pe: " << pe << endl;
+	cout << "Stima dell'errore in norma infinito: " << einf << endl;
+	cout << "Stima dell'errore in norma H1: " << eH1 << endl;
+	cout << "Max(ucalcolata - uesatta): " << e[].max << endl;
+	cout << "Dimensione del sistema lineare: " << Vh.ndof << endl;
+	cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+	cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl << endl;
+	//plot(e, wait=1, fill=1, cmm="Valore di h: " + h);
+}
+
+for (real h = 0.5; h > 0.01; h *= 0.5) {
+	cout << "Streamline diffusion" << endl;
+	cout << "Elementi P1" << endl;
+	t0 = clock();
+	int n = round(1/h);
+	mesh Th = buildmesh(left(6*n) + down(3*n) + right(4*n) + up(3*n));
+	fespace Vh(Th, P1);
+	Vh uh, vh;
+	real pe = bnorm*h/(2*mu);
+	problem adr(uh,vh)
+	    = int2d(Th)(mu*(dx(uh)*dx(vh)+dy(uh)*dy(vh)))
+	    /* Il vettore b deve comparire normalizzato nei termini relativi alla streamline diffusion */
+	    + int2d(Th)(mu*pe*(bxn*dx(uh)+byn*dy(uh))*(bxn*dx(vh)+byn*dy(vh)))
+	    - int1d(Th, 2, 4)(mu*pe*vh*(bxn*dx(uh)+byn*dy(uh))*(bxn*N.x+byn*N.y))
+	    + int2d(Th)((bx*dx(uh)+by*dy(uh))*vh)
+	    + int2d(Th)(sigma*uh*vh)
+		+ on(1, uh=+1)
+		+ on(3, uh=-1);
+	t1 = clock();
+
+	t2 = clock();
+	adr;
+	t3 = clock();
+
+	Vref e = uh - u;
+	real einf = e[].linfty;
+	real eH1 = sqrt(int2d(Tref)(e^2+dx(e)^2+dy(e)^2));
+
+	cout << "Valore di h: " << h << endl;
+	cout << "Valore di Pe: " << pe << endl;
+	cout << "Stima dell'errore in norma infinito: " << einf << endl;
+	cout << "Stima dell'errore in norma H1: " << eH1 << endl;
+	cout << "Max(ucalcolata - uesatta): " << e[].max << endl;
+	cout << "Dimensione del sistema lineare: " << Vh.ndof << endl;
+	cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+	cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl << endl;
+	//plot(u, wait=1, fill=1, cmm="Valore di h: " + h);
+}

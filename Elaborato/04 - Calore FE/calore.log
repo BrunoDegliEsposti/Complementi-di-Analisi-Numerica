@@ -1,0 +1,95 @@
+-- FreeFem++ v  4.200001 (date Sat, Jun 08, 2019  6:08:22 PM git v4.2.1)
+ Load: lg_fem lg_mesh lg_mesh3 eigenvalue
+    1 : load "Element_P3"(load: loadLibary C:\Program Files (x86)\FreeFem++\\.\Element_P3 = 0)
+    2 :
+    3 : real h = 0.1;
+    4 : real deltat = 0.1;
+    5 : real tfinal = 1;
+    6 : real theta = 0.5;
+    7 : real ptheta = 2 + 2*(theta==0.5);
+    8 :
+    9 : bool grafici = true;
+   10 :
+   11 : border circle(t = 0, 2*pi) {
+   12 :         x = cos(t);
+   13 :         y = sin(t);
+   14 :         label = 1;
+   15 : }
+   16 :
+   17 : func real f(real t) {
+   18 :         return (4*t+x^2+y^2+2)/(t+1)^2;
+   19 : }
+   20 :
+   21 : func real uexact(real t) {
+   22 :         return (-x^2-y^2+2)/(t+1);
+   23 : }
+   24 :
+   25 : // Mesh di riferimento per la stima dell'errore H1
+   26 : mesh Tref = buildmesh(circle(1000));
+   27 : fespace Vref(Tref, P3);
+   28 :
+   29 : // Numero di suddivisioni della circonferenza
+   30 : int Nsub = round(2*pi/h);
+   31 : mesh Th = buildmesh(circle(Nsub));
+   32 : fespace Vh(Th, P2); int r = 2;
+   33 : Vh uh, fh;
+   34 : varf getM(u,v) = int2d(Th)(u*v);
+   35 : varf getA(u,v) = int2d(Th)(dx(u)*dx(v)+dy(u)*dy(v)) + int1d(Th,1)(2*u*v);
+   36 : varf getf(u,v) = int2d(Th)(fh*v);
+   37 : matrix M = getM(Vh,Vh);
+   38 : matrix A = getA(Vh,Vh);
+   39 : matrix S = M + deltat*theta*A;
+   40 : // Senza 1* davanti a M, la matrice T non viene calcolata correttamente.
+   41 : // Si tratta di un bug di FreeFem che ho provveduto a segnalare.
+   42 : // https://github.com/FreeFem/FreeFem-sources/issues/102
+   43 : matrix T = 1*M - deltat*(1-theta)*A;
+   44 : // La fattorizzazione di Cholesky non genera nuove variabili
+   45 : set(S, solver=Cholesky, factorize=1);
+   46 : // In alternativa, c'è CG con set(S, solver=CG, eps=1e-10);
+   47 :
+   48 : // vs serve per evitare che FreeFEM cambi il colore delle curve di
+   49 : // livello a ogni iterazione. Altrimenti non si vede niente
+   50 : real[int] vs = 0:40;
+   51 : vs *= 0.05;
+   52 : // uh all'istante iniziale t=0
+   53 : uh = -x^2-y^2+2;
+   54 : real t = 0;
+   55 : while (t < tfinal - 1e-8) {
+   56 :         if (grafici) {
+   57 :                 plot(uh, wait=1, fill=1, viso=vs, cmm="t = " + t);
+   58 :         }
+   59 :         // La sintassi uh[] permette di accedere al vettore associato
+   60 :         // a un elemento di Vh rispetto alla base lagrangiana scelta
+   61 :         real[int] yh = T*uh[];
+   62 :         fh = theta*f(t+deltat) + (1-theta)*f(t);
+   63 :         real[int] fterm = getf(0,Vh);
+   64 :         yh += deltat*fterm;
+   65 :         uh[] = S^-1*yh;
+   66 :         t += deltat;
+   67 : }
+   68 :
+   69 : Vref e = uh-uexact(t);
+   70 : real eH1 = sqrt(int2d(Tref,qforder=10)(e^2+dx(e)^2+dy(e)^2));
+   71 :
+   72 : cout << "Valore di sqrt(deltat^p(theta) + h^(2r)): "
+   73 :      << sqrt(deltat^ptheta+h^(2*r)) << endl;
+   74 : cout << "Errore in norma H1: " << eH1 << endl;
+   75 : cout << "Dimensione del sistema lineare: " << Vh.ndof << endl;
+   76 :
+   77 : if (grafici) {
+   78 :         plot(uh, wait=1, fill=1, viso=vs, cmm="t = " + t);
+   79 :         plot(e,  wait=1, fill=1, cmm="Errore finale");
+   80 : }
+   81 :  sizestack + 1024 =3600  ( 2576 )
+ 
+  --  mesh:  Nb of Triangles = 171628, Nb of Vertices 86315
+  --  mesh:  Nb of Triangles =    703, Nb of Vertices 384
+  SkyLineMatrix: size pL/pU: 1470 65391 65391 moy=44.4837
+Valore di sqrt(deltat^p(theta) + h^(2r)): 0.0141421
+Errore in norma H1: 0.0602162
+Dimensione del sistema lineare: 1470
+times: compile 0.131s, execution 62.266s,  mpirank:0
+ ######## We forget of deleting   -9 Nb pointer,   0Bytes  ,  mpirank 0, memory leak =0
+ CodeAlloc : nb ptr  3402,  size :427528 mpirank: 0
+Ok: Normal End
+ try getConsole C:\Users\Bruno\Desktop\Elaborato CAN\04 - Calore FE\calore.edp

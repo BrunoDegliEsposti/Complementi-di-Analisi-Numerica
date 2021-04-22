@@ -1,0 +1,95 @@
+-- FreeFem++ v  4.100000 (date mar.  9 avr. 2019 13:55:28)
+ Load: lg_fem lg_mesh lg_mesh3 eigenvalue
+    1 : real mu = 1;
+    2 : real bx = 30;
+    3 : real by = 0;
+    4 : real bnorm = sqrt(bx*bx+by*by);
+    5 : real bxn = bx/bnorm;
+    6 : real byn = by/bnorm;
+    7 : real sigma = 1;
+    8 : real t0, t1, t2, t3;
+    9 :
+   10 : /* Tutti i bordi sono già orientati correttamente */
+   11 :
+   12 : border left(t = -3, 3) {
+   13 :         x = -1;
+   14 :         y = -t;
+   15 :         label = 1;
+   16 : }
+   17 :
+   18 : border down(t = -1, 1) {
+   19 :         x = t;
+   20 :         y = t-2;
+   21 :         label = 2;
+   22 : }
+   23 :
+   24 : border right(t = -1, 1) {
+   25 :         x = 1;
+   26 :         y = t;
+   27 :         label = 3;
+   28 : }
+   29 :
+   30 : border up(t = -1, 1) {
+   31 :         x = -t;
+   32 :         y = t+2;
+   33 :         label = 4;
+   34 : }
+   35 :
+   36 : func real phi(real pe) {
+   37 :         return pe - 1 + 2*pe/(exp(2*pe)-1);
+   38 : }
+   39 :
+   40 : for (real h = 0.5; h > 0.01; h=0.7*h) {
+   41 :         t0 = clock();
+   42 :         mesh Th = buildmesh(left(15) + down(7) + right(5) + up(7));
+   43 :         Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+   44 :         Th = adaptmesh(Th, hmin=h/2, hmax=h, thetamax=20, keepbackvertices=false, nbvx=1000000, verbosity=0);
+   45 :         fespace Vh(Th, P2);
+   46 :         Vh u, v;
+   47 :         real pe = bnorm*h/(2*mu);
+   48 :         real muupwind = mu*(1+phi(pe));
+   49 :         problem adr(u,v)
+   50 :             = int2d(Th)(mu*(dx(u)*dx(v)+dy(u)*dy(v)))
+   51 :             /* Il vettore b deve comparire normalizzato nei termini relativi alla streamline diffusion */
+   52 :             + int2d(Th)(mu*phi(pe)*(bxn*dx(u)+byn*dy(u))*(bxn*dx(v)+byn*dy(v)))
+   53 :             - int1d(Th, 2, 4)(mu*phi(pe)*v*(bxn*dx(u)+byn*dy(u))*(bxn*N.x+byn*N.y))
+   54 :             + int2d(Th)((bx*dx(u)+by*dy(u))*v)
+   55 :             + int2d(Th)(sigma*u*v)
+   56 :                 + on(1, u=+1)
+   57 :                 + on(3, u=-1);Problem : ----------------------------- 520 dim = 2 0x427f870
+ 
+   58 :         t1 = clock();
+   59 :
+   60 :         t2 = clock();
+   61 :         adr;
+   62 :         t3 = clock();
+   63 :
+   64 :         cout << "Valore di h: " << h << endl;
+   65 :         cout << "Valore di phi(pe): " << phi(pe) << endl;
+   66 :         cout << "Dimensione di Vh: " << Vh.ndof << endl;
+   67 :         cout << "Tempo per l'assemblaggio: " << t1-t0 << " s" << endl;
+   68 :         cout << "Tempo per la soluzione del sistema lineare: " << t3-t2 << " s" << endl << endl;
+   69 :         plot(u, wait=1, fill=1, cmm="Valore di h: " + h);
+   70 : }
+   71 :  sizestack + 1024 =4240  ( 3216 )
+ 
+  --  mesh:  Nb of Triangles =    118, Nb of Vertices 77
+Valore di h: 0.5
+Valore di phi(pe): 6.5
+Dimensione di Vh: 177
+Tempo per l'assemblaggio: 0.08 s
+Tempo per la soluzione del sistema lineare: 0.008 s
+ 
+Valore di h: 0.35
+Valore di phi(pe): 4.25029
+Dimensione di Vh: 334
+Tempo per l'assemblaggio: 0.086 s
+Tempo per la soluzione del sistema lineare: 0.014 s
+ 
+Valore di h: 0.245
+Valore di phi(pe): 2.67973
+Dimensione di Vh: 653
+Tempo per l'assemblaggio: 0.083 s
+Tempo per la soluzione del sistema lineare: 0.029 s
+ 
+^C try getConsole C:\Users\Bruno\Desktop\Elaborato CAN\ADR FE\adr.edp

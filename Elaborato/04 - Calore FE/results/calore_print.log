@@ -1,0 +1,134 @@
+-- FreeFem++ v  4.200001 (date Sat, Jun 08, 2019  6:08:22 PM git v4.2.1)
+ Load: lg_fem lg_mesh lg_mesh3 eigenvalue
+    1 : load "Element_P4"(load: loadLibary C:\Program Files (x86)\FreeFem++\\.\Element_P4 = 0)
+    2 :
+    3 : real h = 0.2;
+    4 : real deltat = 0.2;
+    5 : real tfinal = 1;
+    6 : real theta = 0.5;
+    7 : real ptheta = 2 + 2*(theta==0.5);
+    8 : verbosity = 0;
+    9 : bool grafici = false;
+   10 :
+   11 : border circle(t = 0, 2*pi) {
+   12 :         x = cos(t);
+   13 :         y = sin(t);
+   14 :         label = 1;
+   15 : }
+   16 :
+   17 : func real f(real t) {
+   18 :         return (4*t+x^2+y^2+2)/(t+1)^2;
+   19 : }
+   20 :
+   21 : func real uexact(real t) {
+   22 :         return (-x^2-y^2+2)/(t+1);
+   23 : }
+   24 :
+   25 : // Mesh di riferimento per la stima dell'errore H1
+   26 : mesh Tref = buildmesh(circle(1000));
+   27 : fespace Vref(Tref, P4);
+   28 :
+   29 : for (int j = 0; j < 8; j++) {
+   30 :
+   31 : // Numero di suddivisioni della circonferenza
+   32 : int Nsub = round(2*pi/h);
+   33 : mesh Th = buildmesh(circle(Nsub));
+   34 : fespace Vh(Th, P2); int r = 2;
+   35 : Vh uh, fh;
+   36 : varf getM(u,v) = int2d(Th)(u*v);
+   37 : varf getA(u,v) = int2d(Th)(dx(u)*dx(v)+dy(u)*dy(v)) + int1d(Th,1)(2*u*v);
+   38 : varf getf(u,v) = int2d(Th)(fh*v);
+   39 : matrix M = getM(Vh,Vh);
+   40 : matrix A = getA(Vh,Vh);
+   41 : matrix S = M + deltat*theta*A;
+   42 : // Senza 1* davanti a M, la matrice T non viene calcolata correttamente.
+   43 : // Si tratta di un bug di FreeFem che ho provveduto a segnalare.
+   44 : // https://github.com/FreeFem/FreeFem-sources/issues/102
+   45 : matrix T = 1*M - deltat*(1-theta)*A;
+   46 : // La fattorizzazione di Cholesky non genera nuove variabili
+   47 : set(S, solver=Cholesky, factorize=1);
+   48 : // In alternativa, c'è CG con set(S, solver=CG, eps=1e-10);
+   49 :
+   50 : // vs serve per evitare che FreeFEM cambi il colore delle curve di
+   51 : // livello a ogni iterazione. Altrimenti non si vede niente
+   52 : real[int] vs = 0:40;
+   53 : vs *= 0.05;
+   54 : // uh all'istante iniziale t=0
+   55 : uh = -x^2-y^2+2;
+   56 : real t = 0;
+   57 : while (t < tfinal - 1e-8) {
+   58 :         if (grafici) {
+   59 :                 plot(uh, wait=1, fill=1, viso=vs, cmm="t = " + t);
+   60 :         }
+   61 :         // La sintassi uh[] permette di accedere al vettore associato
+   62 :         // a un elemento di Vh rispetto alla base lagrangiana scelta
+   63 :         real[int] yh = T*uh[];
+   64 :         fh = theta*f(t+deltat) + (1-theta)*f(t);
+   65 :         real[int] fterm = getf(0,Vh);
+   66 :         yh += deltat*fterm;
+   67 :         uh[] = S^-1*yh;
+   68 :         t += deltat;
+   69 : }
+   70 :
+   71 : Vref e = uh-uexact(t);
+   72 : real eH1 = sqrt(int2d(Tref,qforder=10)(e^2+dx(e)^2+dy(e)^2));
+   73 :
+   74 : cout.scientific;
+   75 : cout.precision(2);
+   76 : cout << "Valore di h: " << h << endl;
+   77 : cout << "Valore di deltat: " << deltat << endl;
+   78 : cout << "Valore di sqrt(deltat^p(theta) + h^(2r)): "
+   79 :      << sqrt(deltat^ptheta+h^(2*r)) << endl;
+   80 : cout << "Errore in norma H1: " << eH1 << endl << endl;
+   81 :
+   82 : if (grafici) {
+   83 :         plot(uh, wait=1, fill=1, viso=vs, cmm="t = " + t);
+   84 :         plot(e,  wait=1, fill=1, cmm="Errore finale");
+   85 : }
+   86 :
+   87 : h *= 1/sqrt(2);
+   88 : deltat *= 1/sqrt(2);
+   89 : }
+   90 :  sizestack + 1024 =3608  ( 2584 )
+ 
+Valore di h: 2.00e-01
+Valore di deltat: 2.00e-01
+Valore di sqrt(deltat^p(theta) + h^(2r)): 5.66e-02
+Errore in norma H1: 1.47e-01
+ 
+Valore di h: 1.41e-01
+Valore di deltat: 1.41e-01
+Valore di sqrt(deltat^p(theta) + h^(2r)): 2.83e-02
+Errore in norma H1: 9.59e-02
+ 
+Valore di h: 1.00e-01
+Valore di deltat: 1.00e-01
+Valore di sqrt(deltat^p(theta) + h^(2r)): 1.41e-02
+Errore in norma H1: 6.88e-02
+ 
+Valore di h: 7.07e-02
+Valore di deltat: 7.07e-02
+Valore di sqrt(deltat^p(theta) + h^(2r)): 7.07e-03
+Errore in norma H1: 3.45e-02
+ 
+Valore di h: 5.00e-02
+Valore di deltat: 5.00e-02
+Valore di sqrt(deltat^p(theta) + h^(2r)): 3.54e-03
+Errore in norma H1: 1.78e-02
+ 
+Valore di h: 3.54e-02
+Valore di deltat: 3.54e-02
+Valore di sqrt(deltat^p(theta) + h^(2r)): 1.77e-03
+Errore in norma H1: 8.61e-03
+ 
+Valore di h: 2.50e-02
+Valore di deltat: 2.50e-02
+Valore di sqrt(deltat^p(theta) + h^(2r)): 8.84e-04
+Errore in norma H1: 4.30e-03
+ 
+Valore di h: 1.77e-02
+Valore di deltat: 1.77e-02
+Valore di sqrt(deltat^p(theta) + h^(2r)): 4.42e-04
+Errore in norma H1: 2.02e-03
+ 
+ try getConsole C:\Users\Bruno\Desktop\Elaborato CAN\04 - Calore FE\calore_print.edp
