@@ -3,7 +3,7 @@ Codice scritto durante il corso Complementi di Analisi Numerica, Università di 
 
 Linguaggi utilizzati: FreeFEM, MATLAB
 
-Docente: Alessandra Sestini
+Docente: Prof. Alessandra Sestini
 
 Testo di riferimento: Note del docente
 
