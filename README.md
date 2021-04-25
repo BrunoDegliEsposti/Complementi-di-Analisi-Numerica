@@ -1,5 +1,8 @@
 # Complementi-di-Analisi-Numerica
 Codice scritto durante il corso Complementi di Analisi Numerica, Università di Firenze a.a. 2018/19
+Linguaggi utilizzati: FreeFEM, MATLAB
+Docente: Alessandra Sestini
+Testo di riferimento: Note del docente
 
 Argomenti trattati:
 - Metodo delle differenze finite per il problema di Diffusione-Reazione-Trasporto
